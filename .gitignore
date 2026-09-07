@@ -1,0 +1,19 @@
+# This repository is rooted at $HOME, but it only tracks the NixOS
+# configuration. Everything is ignored by default and the config trees are
+# re-included explicitly, so a stray file in $HOME can never be committed by
+# accident -- which is how ~1 GB of Minecraft saves, Steam blobs, shell
+# histories and private keys ended up staged here once before.
+/*
+
+!/.gitignore
+!/README.md
+!/nix/
+!/archive/
+
+# Rebuild and editor leftovers inside the tracked trees.
+*.bak
+*.bak-*
+*.swp
+*~
+/nix/result
+/nix/result-*
