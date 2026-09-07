@@ -34,14 +34,21 @@
     PAGER = "less -FRX";
   };
 
-  # defaultEditor exports EDITOR for this profile.
+  # Neovim. The lua lives in ./nvim as real files rather than a nix string:
+  # initLua becomes ~/.config/nvim/init.lua and ./nvim/lua is symlinked next
+  # to it (see xdg.configFile below), so the config edits like any lua project
+  # and gets its own LSP and treesitter.
+  #
+  # Ported from github.com/dunncj/nvim, minus lazy.nvim and mason - nix
+  # installs the plugins and the servers, so there is no lock file to drift
+  # and no downloaded binaries that would not run on NixOS.
   programs.neovim = {
     enable = true;
     defaultEditor = true;
     viAlias = true;
     vimAlias = true;
 
-    # The config below is pure Lua and uses no remote plugins, so skip the
+    # The config is pure Lua and uses no remote plugins, so skip the
     # Ruby/Python/Node providers rather than dragging them into the closure.
     # (These also become the upstream defaults at stateVersion 26.05.)
     withRuby = false;
@@ -50,6 +57,7 @@
 
     plugins = with pkgs.vimPlugins; [
       tokyonight-nvim
+
       (nvim-treesitter.withPlugins (
         p: with p; [
           bash
@@ -97,60 +105,56 @@
           yaml
         ]
       ))
+
+      # Editing
+      autoclose-nvim
+      nvim-ts-autotag
+      luasnip
+      friendly-snippets
+
+      # Completion
+      nvim-cmp
+      cmp-nvim-lsp
+      cmp-buffer
+      cmp-path
+      cmp-cmdline
+      cmp_luasnip
+
+      # Finding (telescope shells out to ripgrep/fd from home.packages)
+      plenary-nvim
+      telescope-nvim
+      telescope-fzf-native-nvim
+
+      # LSP
+      nvim-lspconfig
+      fidget-nvim
     ];
 
-    initLua = ''
-      vim.g.mapleader = " "
+    # Language servers, replacing what mason used to fetch at runtime. These
+    # land on neovim's PATH only, not in the profile.
+    extraPackages = with pkgs; [
+      bash-language-server
+      basedpyright
+      clang-tools
+      dockerfile-language-server
+      emmet-language-server
+      gopls
+      helm-ls
+      lua-language-server
+      nixd
+      nixfmt # nixd shells out to this to format
+      rust-analyzer
+      terraform-ls
+      typescript-language-server
+      vscode-langservers-extracted # jsonls
+      yaml-language-server
+    ];
 
-      -- Line numbers
-      vim.opt.number = true
-      vim.opt.relativenumber = true
-
-      -- Indentation
-      vim.opt.tabstop = 4
-      vim.opt.shiftwidth = 4
-      vim.opt.softtabstop = 4
-      vim.opt.expandtab = true
-      vim.opt.smartindent = true
-
-      -- Search
-      vim.opt.ignorecase = true
-      vim.opt.smartcase = true
-      vim.opt.hlsearch = false
-      vim.opt.incsearch = true
-
-      -- UI
-      vim.cmd.colorscheme("tokyonight-night")
-      vim.opt.termguicolors = true
-      vim.opt.cursorline = true
-      vim.opt.signcolumn = "yes"
-      vim.opt.wrap = false
-      vim.opt.scrolloff = 8
-
-      -- Misc
-      vim.opt.mouse = "a"
-      vim.opt.clipboard = "unnamedplus"
-      vim.opt.splitbelow = true
-      vim.opt.splitright = true
-      vim.opt.swapfile = false
-      vim.opt.undofile = true
-      vim.opt.updatetime = 250
-
-      -- Keymaps
-      local map = vim.keymap.set
-
-      map("n", "<leader>t", "<cmd>:Ex<CR>")
-
-      map("n", "<leader>w", "<cmd>w<CR>")
-      map("n", "<leader>q", "<cmd>q<CR>")
-      map("n", "<leader>x", "<cmd>x<CR>")
-
-      map("n", "<C-h>", "<C-w>h")
-      map("n", "<C-j>", "<C-w>j")
-      map("n", "<C-k>", "<C-w>k")
-      map("n", "<C-l>", "<C-w>l")
-    '';
+    initLua = builtins.readFile ./nvim/init.lua;
   };
+
+  # The rest of the lua tree, alongside the init.lua neovim writes itself.
+  xdg.configFile."nvim/lua".source = ./nvim/lua;
 
   programs.tmux = {
     enable = true;

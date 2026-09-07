@@ -1,0 +1,123 @@
+-- Servers come from nix (programs.neovim.extraPackages in ../../../../home.nix),
+-- not from mason. mason downloads prebuilt, dynamically-linked binaries, which
+-- do not run on NixOS - so mason and mason-lspconfig are gone and the server
+-- list lives in home.nix instead.
+--
+-- Neovim 0.12 is used directly: nvim-lspconfig is here only for the ~400
+-- server definitions under its lsp/ directory, which vim.lsp.enable reads.
+
+require("fidget").setup({})
+
+-- Advertise nvim-cmp's completion capabilities to every server.
+vim.lsp.config("*", {
+    capabilities = require("cmp_nvim_lsp").default_capabilities(),
+})
+
+local flake = [[(builtins.getFlake "/home/turbo/nix")]]
+
+vim.lsp.config("nixd", {
+    settings = {
+        nixd = {
+            nixpkgs = { expr = "import " .. flake .. ".inputs.nixpkgs { }" },
+            formatting = { command = { "nixfmt" } },
+            options = {
+                -- Completion for this machine's own NixOS and home-manager
+                -- options, evaluated straight out of the flake.
+                nixos = {
+                    expr = flake .. ".nixosConfigurations.agartha.options",
+                },
+                home_manager = {
+                    expr = flake
+                        .. ".nixosConfigurations.agartha.options.home-manager.users.type.getSubOptions []",
+                },
+            },
+        },
+    },
+})
+
+-- Root detection hazard worth knowing about: $HOME is itself a git repo, so
+-- any server that falls back to a .git marker outside a real project will try
+-- to index all ~117k files under /home/turbo. lua_ls hits this and refuses to
+-- load, which is why ../../../.luarc.json exists - it gives lua_ls a nearer
+-- root. Drop a project marker (.luarc.json, flake.nix, go.mod, ...) if another
+-- server ever does the same.
+vim.lsp.config("lua_ls", {
+    settings = {
+        Lua = {
+            runtime = { version = "LuaJIT" },
+            -- This config is itself lua that talks to the nvim API.
+            diagnostics = { globals = { "vim" } },
+            workspace = {
+                library = vim.api.nvim_get_runtime_file("", true),
+                checkThirdParty = false,
+            },
+            telemetry = { enable = false },
+        },
+    },
+})
+
+vim.lsp.enable({
+    "nixd",
+    "lua_ls",
+    "rust_analyzer",
+    "gopls",
+    "clangd",
+    "ts_ls",
+    "emmet_ls",
+    "bashls",
+    "jsonls",
+    "yamlls",
+    "helm_ls",
+    "terraformls",
+    "dockerls",
+    "basedpyright",
+})
+
+vim.diagnostic.config({
+    float = {
+        focusable = false,
+        style = "minimal",
+        border = "rounded",
+        -- Was `source = "always"`, which nvim 0.11 removed in favour of a boolean.
+        source = true,
+        header = "",
+        prefix = "",
+    },
+})
+
+-- The old config passed `on_attach = on_attach`, but no such global was ever
+-- defined, so it silently attached nothing and LSP had no keymaps at all.
+vim.api.nvim_create_autocmd("LspAttach", {
+    group = vim.api.nvim_create_augroup("turbo_lsp_attach", { clear = true }),
+    callback = function(args)
+        local function map(keys, fn, desc)
+            vim.keymap.set("n", keys, fn, { buffer = args.buf, desc = "LSP: " .. desc })
+        end
+
+        local builtin = require("telescope.builtin")
+
+        map("gd", builtin.lsp_definitions, "Go to definition")
+        map("gr", builtin.lsp_references, "References")
+        map("gi", builtin.lsp_implementations, "Implementations")
+        map("gt", builtin.lsp_type_definitions, "Type definition")
+        map("gD", vim.lsp.buf.declaration, "Go to declaration")
+
+        map("K", vim.lsp.buf.hover, "Hover docs")
+        map("<leader>rn", vim.lsp.buf.rename, "Rename symbol")
+        map("<leader>ca", vim.lsp.buf.code_action, "Code action")
+        map("<leader>e", vim.diagnostic.open_float, "Line diagnostics")
+        map("<leader>ds", builtin.lsp_document_symbols, "Document symbols")
+
+        map("<leader>lf", function()
+            vim.lsp.buf.format({ async = true })
+        end, "Format buffer")
+
+        map("[d", function()
+            vim.diagnostic.jump({ count = -1, float = true })
+        end, "Previous diagnostic")
+
+        map("]d", function()
+            vim.diagnostic.jump({ count = 1, float = true })
+        end, "Next diagnostic")
+    end,
+})

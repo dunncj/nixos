@@ -19,6 +19,7 @@ nix/
     sunshine.nix                   synthetic EDID so headless capture works
     power.nix                      forbids sleep and display blanking
   turbo/home.nix                   home-manager: the entire turbo environment
+  turbo/nvim/                      neovim config, as real .lua files
   k3s/, services/                  workload manifests, applied by hand
 
 archive/titan/                     previous host's config; not built by anything
@@ -55,6 +56,38 @@ nb gc         delete generations older than 14 days
 it re-execs systemd afterwards so a dbus restart cannot leave `reboot` silently
 doing nothing.
 
+## Neovim
+
+Ported from `github.com/dunncj/nvim`, with lazy.nvim and mason removed - nix
+installs the plugins and the language servers, so there is no lock file to
+drift and no downloaded binaries (mason ships dynamically-linked ones that do
+not run on NixOS).
+
+The lua lives in `nix/turbo/nvim` as ordinary files. `home-manager` writes
+`init.lua` to `~/.config/nvim/init.lua` and symlinks the `lua/` tree beside
+it, so edit `nix/turbo/nvim/**` and run `nb`.
+
+```
+nvim/init.lua                 require("turbo")
+nvim/lua/turbo/options.lua    editor options
+nvim/lua/turbo/remap.lua      keymaps that are not plugin-specific
+nvim/lua/turbo/plugins/       one file per plugin, each just its setup call
+nvim/.luarc.json              root marker, see below
+```
+
+Leader is `<Space>`. `<leader>ff` find files, `<leader>gf` git files,
+`<leader>fg` grep word under cursor, `<leader>ps` grep prompt, `<leader>vh`
+help. On an LSP buffer: `gd` definition, `gr` references, `K` hover,
+`<leader>rn` rename, `<leader>ca` code action, `<leader>lf` format, `[d`/`]d`
+diagnostics. Completion is `C-n`/`C-p` to move, `C-y` to accept, `C-Space` to
+summon.
+
+`nvim/.luarc.json` is load-bearing. Because this repo is rooted at `$HOME`,
+a language server that falls back to a `.git` root marker resolves to
+`/home/turbo` and tries to index every file under it - lua_ls refuses outright.
+The marker gives it a nearer root. Any other server that hits this needs the
+same treatment.
+
 ## Repo scope
 
 This repository is rooted at `$HOME`, but `.gitignore` ignores everything and
@@ -67,8 +100,8 @@ from `/etc/wireguard/private.key`; only the peer's public key appears here.
 
 ## Formatting
 
-All `.nix` files are formatted with `nixfmt-rfc-style`:
+All `.nix` files are formatted with `nixfmt` (the RFC 166 style):
 
 ```
-nix run nixpkgs#nixfmt-rfc-style -- $(find nix -name '*.nix' -not -name 'hardware-configuration.nix')
+nix run nixpkgs#nixfmt -- $(find nix -name '*.nix' -not -name 'hardware-configuration.nix')
 ```
