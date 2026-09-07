@@ -67,14 +67,6 @@
     enableOnBoot = true;
   };
 
-  # Kept minimal on purpose - user tooling belongs in ../../turbo/home.nix.
-  # These are the "fix a broken system over SSH" set.
-  environment.systemPackages = with pkgs; [
-    vim
-    wget
-    curl
-  ];
-
   # Pins stateful defaults to the release this host was installed from.
   # Do not change it: it is not a "which nixpkgs am I on" knob.
   system.stateVersion = "24.05";
