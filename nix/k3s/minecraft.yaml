@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minecraft-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minecraft
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: minecraft
+
+  template:
+    metadata:
+      labels:
+        app: minecraft
+
+    spec:
+      containers:
+        - name: minecraft
+          image: itzg/minecraft-server
+
+          env:
+            - name: EULA
+              value: "TRUE"
+
+            - name: TYPE
+              value: "PAPER"
+
+            - name: MEMORY
+              value: "4G"
+
+          ports:
+            - containerPort: 25565
+
+          volumeMounts:
+            - name: minecraft-data
+              mountPath: /data
+
+      volumes:
+        - name: minecraft-data
+          persistentVolumeClaim:
+            claimName: minecraft-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minecraft
+
+spec:
+  selector:
+    app: minecraft
+
+  type: NodePort
+
+  ports:
+    - port: 25565
+      targetPort: 25565
+      protocol: TCP
+      nodePort: 30976
