@@ -7,7 +7,7 @@
 #
 # Applied by `nb` as a NixOS home-manager module, not a separate
 # `home-manager switch`.
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 
 {
   home.username = "turbo";
@@ -223,6 +223,11 @@
       user.email = "cameron@camerondunn.net";
       init.defaultBranch = "main";
       pull.rebase = false;
+
+      # Authenticate pushes through the gh token rather than a second
+      # credential store. `gh auth setup-git` cannot be used here: it writes to
+      # the global gitconfig, which home-manager owns and mounts read-only.
+      credential."https://github.com".helper = "!${lib.getExe pkgs.gh} auth git-credential";
     };
   };
 
