@@ -75,17 +75,30 @@ let
     passAsFile = [ "body" ];
   } ''substitute "$bodyPath" "$out" --replace-fail '@SELF@' "$out"'';
 
+  # Deliberately minimal: user, host and a prompt character, nothing else.
+  # Starship's default format would otherwise add a git branch on every
+  # directory ($HOME is itself a git repo) and a Java version in $HOME
+  # (server.jar makes it look like a Java project).
   starshipConfig = (formats.toml { }).generate "starship.toml" {
     add_newline = false;
-    format = "$directory$character";
+    format = "$username$hostname$character";
+
+    username = {
+      show_always = true;
+      format = "[$user]($style)";
+      style_user = "bold green";
+      style_root = "bold red";
+    };
+
+    hostname = {
+      ssh_only = false;
+      format = "@[$hostname]($style) ";
+      style = "bold green";
+    };
+
     character = {
       success_symbol = "[❯](bold green)";
       error_symbol = "[❯](bold red)";
-    };
-    git_branch.format = "[$symbol$branch]($style) ";
-    directory = {
-      truncation_length = 3;
-      truncate_to_repo = false;
     };
   };
 
@@ -127,6 +140,10 @@ in
     name = "starship-turbo";
     package = starship;
     binary = "starship";
-    args = ''--set-default STARSHIP_CONFIG "${starshipConfig}"'';
+    # --set, not --set-default: a stale STARSHIP_CONFIG in the environment
+    # (systemd user managers keep imported values long after the file that set
+    # them is gone) would otherwise silently defeat this config and drop
+    # starship back to its defaults.
+    args = ''--set STARSHIP_CONFIG "${starshipConfig}"'';
   };
 }
