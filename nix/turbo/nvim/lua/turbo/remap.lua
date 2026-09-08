@@ -6,7 +6,7 @@ vim.keymap.set("n", "<leader>t", vim.cmd.Ex, { desc = "File explorer" })
 vim.keymap.set("n", "<leader>vs", "<C-w>v", { desc = "Split vertical" })
 vim.keymap.set("n", "<leader>hs", "<C-w>s", { desc = "Split horizontal" })
 
--- Window navigation. The old config sent these to ZellijNavigate*; agartha
+-- Window navigation. The old config sent these to ZellijNavigate*; this host
 -- runs tmux, where panes are already on <prefix> h/j/k/l, so these stay as
 -- plain window moves and the two do not overlap.
 vim.keymap.set("n", "<C-h>", "<C-w>h", { desc = "Window left" })

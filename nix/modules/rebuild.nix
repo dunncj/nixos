@@ -27,7 +27,7 @@
       ];
       text = ''
         FLAKE_DIR=/home/turbo/nix
-        FLAKE="path:$FLAKE_DIR#agartha"
+        FLAKE="path:$FLAKE_DIR#shambhala"
 
         usage() {
             echo "nb - rebuild NixOS from $FLAKE_DIR"
@@ -112,7 +112,7 @@
                 ;;
             diff)
                 built="$(nix build --no-link --print-out-paths \
-                    "path:$FLAKE_DIR#nixosConfigurations.agartha.config.system.build.toplevel")"
+                    "path:$FLAKE_DIR#nixosConfigurations.shambhala.config.system.build.toplevel")"
                 nvd diff /run/current-system "$built"
                 ;;
             gc)

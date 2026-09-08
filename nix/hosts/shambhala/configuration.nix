@@ -1,4 +1,4 @@
-# agartha - headless Plasma box: Sunshine/Moonlight host, k3s server, Minecraft
+# shambhala - headless Plasma box: Sunshine/Moonlight host, k3s server, Minecraft
 # server. Nothing is ever sat in front of it, which is why autologin is on and
 # ../../modules/power.nix forbids sleep.
 #
@@ -31,7 +31,7 @@
   };
   services.desktopManager.plasma6.enable = true;
 
-  networking.hostName = "agartha";
+  networking.hostName = "shambhala";
   networking.networkmanager.enable = true;
   networking.firewall.allowedUDPPorts = [ 41641 ]; # tailscale
   hardware.enableRedistributableFirmware = true;

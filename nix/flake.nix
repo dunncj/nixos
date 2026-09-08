@@ -1,5 +1,5 @@
 {
-  description = "agartha - NixOS configuration, and turbo's portable environment";
+  description = "shambhala - NixOS configuration, and turbo's portable environment";
 
   # No home-manager. The only thing it still did here was write dotfiles into
   # $HOME; those are now system programs writing /etc, which is inert for root
@@ -15,11 +15,11 @@
       pkgs = nixpkgs.legacyPackages.${system};
 
       flakePath = "/home/turbo/nix";
-      hostName = "agartha";
+      hostName = "shambhala";
     in
     {
       # The portable unit. On another NixOS machine:
-      #   imports = [ inputs.agartha.nixosModules.turbo ];
+      #   imports = [ inputs.shambhala.nixosModules.turbo ];
       # Nothing in it is specific to this host; set turbo.flakePath,
       # turbo.hostName and turbo.extraGroups there.
       nixosModules.turbo = ./turbo/system.nix;
@@ -41,7 +41,7 @@
         modules = [
           # hardware-configuration.nix is imported by configuration.nix, so it
           # is deliberately not listed again here.
-          ./hosts/agartha/configuration.nix
+          ./hosts/shambhala/configuration.nix
 
           ./modules/rebuild.nix
           ./modules/k3s.nix

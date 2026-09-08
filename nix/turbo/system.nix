@@ -41,7 +41,7 @@ in
     hostName = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      example = "agartha";
+      example = "shambhala";
       description = ''
         Which `nixosConfigurations` entry nixd should evaluate for option
         completion. Only meaningful alongside `turbo.flakePath`.
@@ -69,7 +69,7 @@ in
       ++ cfg.extraGroups;
 
       openssh.authorizedKeys.keys = [
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILRrMGvIUXrzbm74iexuJz3HM+/NXPQnnQPDcLZ/CdYL turbo@agartha"
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILRrMGvIUXrzbm74iexuJz3HM+/NXPQnnQPDcLZ/CdYL turbo@shambhala"
       ];
 
       # The whole environment as one package. Per-user, so root's PATH is

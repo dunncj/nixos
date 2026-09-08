@@ -1,6 +1,6 @@
 # nixos
 
-NixOS configuration for **agartha** — a headless box that runs a Plasma session
+NixOS configuration for **shambhala** — a headless box that runs a Plasma session
 for Sunshine/Moonlight streaming, a single-node k3s server, and a Minecraft
 server.
 
@@ -8,8 +8,8 @@ server.
 
 ```
 nix/
-  flake.nix                        inputs + the agartha system
-  hosts/agartha/
+  flake.nix                        inputs + the shambhala system
+  hosts/shambhala/
     configuration.nix              boot, desktop, networking, wireguard
     hardware-configuration.nix     generated; do not hand-edit
   modules/
