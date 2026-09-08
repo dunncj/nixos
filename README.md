@@ -18,7 +18,10 @@ nix/
     k3s.nix                        single-node k3s server
     sunshine.nix                   synthetic EDID so headless capture works
     power.nix                      forbids sleep and display blanking
-  turbo/home.nix                   home-manager: the entire turbo environment
+  turbo/tools.nix                  shared CLI tool list
+  turbo/neovim.nix                 the editor as one derivation
+  turbo/home.nix                   home-manager module (tools + dotfiles)
+  turbo/package.nix                the same, as a standalone package
   turbo/nvim/                      neovim config, as real .lua files
   k3s/, services/                  workload manifests, applied by hand
 
@@ -55,6 +58,47 @@ nb gc         delete generations older than 14 days
 `~/nix` so nix does not copy this whole repo into the store on every build, and
 it re-execs systemd afterwards so a dbus restart cannot leave `reboot` silently
 doing nothing.
+
+## The turbo environment
+
+`turbo/` is built to be reusable on other machines, so it is kept free of
+anything specific to agartha. Three files are shared by every consumer, which
+is what stops the module and the package from drifting apart:
+
+```
+turbo/tools.nix     the CLI tool list
+turbo/neovim.nix    the editor as one derivation - plugins, lua tree and
+                    language servers all baked into the wrapper
+turbo/nvim/         the lua, as ordinary files
+turbo/home.nix      home-manager module: the above, plus the dotfiles
+turbo/package.nix   the above, minus the dotfiles, as a single package
+```
+
+The flake exposes four ways to consume it:
+
+| output | for |
+|---|---|
+| `nixosConfigurations.agartha` | this box; `nb` |
+| `homeModules.turbo` | another NixOS machine: `home-manager.users.turbo = inputs.agartha.homeModules.turbo;` |
+| `homeConfigurations.turbo` | a Linux box that is not NixOS: `home-manager switch --flake .#turbo` |
+| `packages.x86_64-linux.turbo` | any machine with nix: `nix profile install github:dunncj/nixos?dir=nix#turbo` |
+
+`turbo.flakePath` and `turbo.hostName` are the only host-dependent options.
+They tell nixd which flake to evaluate for NixOS and home-manager option
+completion; leave them null on a machine this repo does not build and nixd
+still runs without it.
+
+### What the package can and cannot do
+
+The editor is complete: it carries its plugins, lua and language servers
+inside the wrapper, needs nothing in `$HOME`, and ignores `~/.config/nvim`
+entirely. It is byte-identical whether it arrives via the module or the
+package - the same store path either way.
+
+The shell dotfiles are not in the package. zsh, git and tmux read their config
+from `$HOME`, and writing to `$HOME` is an activation step, which is not
+something a derivation may do. That is the one job home-manager is actually
+needed for; everything else here would work without it.
 
 ## Neovim
 
