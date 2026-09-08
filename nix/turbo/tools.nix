@@ -1,8 +1,12 @@
 # The CLI tools turbo expects on any machine. Shared by ./home.nix and
 # ./package.nix so the module and the environment package cannot drift apart.
 #
-# The editor is not here - it is ./neovim.nix, which is a wrapper around a lot
-# more than a package name.
+# Anything with config of its own is not here: the editor is ./neovim.nix and
+# git/tmux/starship are ./wrappers.nix, each carrying its config inside the
+# derivation.
+#
+# direnv is here rather than wrapped because its config is a shell hook, which
+# ./system.nix installs into zsh.
 pkgs: with pkgs; [
   bat
   direnv
@@ -15,6 +19,5 @@ pkgs: with pkgs; [
   jq
   ripgrep
   rustup
-  starship
   tree
 ]

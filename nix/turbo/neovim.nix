@@ -33,7 +33,7 @@
   vscode-langservers-extracted,
   yaml-language-server,
 
-  # Which flake nixd should evaluate for NixOS/home-manager option completion.
+  # Which flake nixd should evaluate for NixOS option completion.
   # Leave both null on a machine this repo does not build; nixd still runs,
   # just without option completion.
   flakePath ? null,

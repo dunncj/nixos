@@ -14,14 +14,14 @@ nix/
     hardware-configuration.nix     generated; do not hand-edit
   modules/
     rebuild.nix                    the `nb` command and the /etc/nixos symlink
-    turbo.nix                      the turbo account, and nothing else
     k3s.nix                        single-node k3s server
     sunshine.nix                   synthetic EDID so headless capture works
     power.nix                      forbids sleep and display blanking
-  turbo/tools.nix                  shared CLI tool list
+  turbo/tools.nix                  plain CLI tools
+  turbo/wrappers.nix               git/tmux/starship with config baked in
   turbo/neovim.nix                 the editor as one derivation
-  turbo/home.nix                   home-manager module (tools + dotfiles)
-  turbo/package.nix                the same, as a standalone package
+  turbo/package.nix                all of it as one buildEnv
+  turbo/system.nix                 NixOS module: account + that package + zsh
   turbo/nvim/                      neovim config, as real .lua files
   k3s/, services/                  workload manifests, applied by hand
 
@@ -31,15 +31,19 @@ archive/titan/                     previous host's config; not built by anything
 ## Layering
 
 The system config stays as minimal as it can be. Root gets no conveniences -
-no git, no editor, no tmux. Everything this user works with lives in the
-`turbo` home-manager profile at `nix/turbo/home.nix`, because that profile is
-what makes a machine turbo's and it has to be the single place that defines
-that environment.
+no git, no editor, no tmux, no starship. Everything turbo works with lives in
+the `turbo` profile, installed through `users.users.turbo.packages`, so it
+lands in `/etc/profiles/per-user/turbo` and never on root's PATH.
 
-So: new packages and program config go in `turbo/home.nix`. The system layer
-gets something only when it genuinely cannot work otherwise - a service, a
-hardware option, or `programs.zsh.enable`, which NixOS requires before zsh can
-be a login shell.
+There is no home-manager. Anything with config carries it inside its own
+wrapper (see below), so nothing needs writing into `$HOME`. The single
+exception is zsh: a login shell reads `/etc/zshrc`, which only the NixOS zsh
+module can supply, and that module is also what lets zsh be turbo's shell at
+all.
+
+So: new packages go in `turbo/tools.nix`; anything with config gets a wrapper
+in `turbo/wrappers.nix`. The system layer gets something only when it
+genuinely cannot work otherwise.
 
 ## Rebuilding
 
@@ -62,43 +66,44 @@ doing nothing.
 ## The turbo environment
 
 `turbo/` is built to be reusable on other machines, so it is kept free of
-anything specific to agartha. Three files are shared by every consumer, which
-is what stops the module and the package from drifting apart:
+anything specific to this host:
 
 ```
-turbo/tools.nix     the CLI tool list
-turbo/neovim.nix    the editor as one derivation - plugins, lua tree and
-                    language servers all baked into the wrapper
+turbo/tools.nix     plain CLI tools, no config of their own
+turbo/wrappers.nix  git, tmux and starship, each with its config baked in
+turbo/neovim.nix    the editor - plugins, lua tree and language servers,
+                    all inside the wrapper
 turbo/nvim/         the lua, as ordinary files
-turbo/home.nix      home-manager module: the above, plus the dotfiles
-turbo/package.nix   the above, minus the dotfiles, as a single package
+turbo/package.nix   all of the above as one buildEnv
+turbo/system.nix    the NixOS module: the account, that package, and zsh
 ```
 
-The flake exposes four ways to consume it:
+Two ways to consume it:
 
 | output | for |
 |---|---|
-| `nixosConfigurations.agartha` | this box; `nb` |
-| `homeModules.turbo` | another NixOS machine: `home-manager.users.turbo = inputs.agartha.homeModules.turbo;` |
-| `homeConfigurations.turbo` | a Linux box that is not NixOS: `home-manager switch --flake .#turbo` |
+| `nixosModules.turbo` | another NixOS machine: `imports = [ inputs.shambhala.nixosModules.turbo ];` |
 | `packages.x86_64-linux.turbo` | any machine with nix: `nix profile install github:dunncj/nixos?dir=nix#turbo` |
 
-`turbo.flakePath` and `turbo.hostName` are the only host-dependent options.
-They tell nixd which flake to evaluate for NixOS and home-manager option
-completion; leave them null on a machine this repo does not build and nixd
-still runs without it.
+`turbo.flakePath`, `turbo.hostName` and `turbo.extraGroups` are the only
+host-dependent options. The first two tell nixd which flake to evaluate for
+NixOS option completion; leave them null elsewhere and nixd still runs.
 
-### What the package can and cannot do
+### Why wrappers instead of dotfiles
 
-The editor is complete: it carries its plugins, lua and language servers
-inside the wrapper, needs nothing in `$HOME`, and ignores `~/.config/nvim`
-entirely. It is byte-identical whether it arrives via the module or the
-package - the same store path either way.
+`programs.git`, `programs.tmux`, `programs.starship` and `programs.direnv` all
+push their package into `environment.systemPackages`, which would put them on
+root's PATH. Wrapping them here keeps them in turbo's profile only.
 
-The shell dotfiles are not in the package. zsh, git and tmux read their config
-from `$HOME`, and writing to `$HOME` is an activation step, which is not
-something a derivation may do. That is the one job home-manager is actually
-needed for; everything else here would work without it.
+It also makes them portable. `git` gets `GIT_CONFIG_SYSTEM` (so a personal
+`~/.gitconfig` still layers on top and `git config --global` keeps working),
+`tmux` gets `-f`, and `starship` gets `STARSHIP_CONFIG`. All three behave the
+same whether they arrive via the NixOS module or a bare `nix profile install`
+on a machine that has never seen this repo - verified running with an empty
+`$HOME` and nothing but the package on `PATH`.
+
+direnv is the exception: its config is a shell hook, so it is a plain package
+and `turbo/system.nix` installs the hook into zsh.
 
 ## Neovim
 
@@ -107,9 +112,9 @@ installs the plugins and the language servers, so there is no lock file to
 drift and no downloaded binaries (mason ships dynamically-linked ones that do
 not run on NixOS).
 
-The lua lives in `nix/turbo/nvim` as ordinary files. `home-manager` writes
-`init.lua` to `~/.config/nvim/init.lua` and symlinks the `lua/` tree beside
-it, so edit `nix/turbo/nvim/**` and run `nb`.
+The lua lives in `nix/turbo/nvim` as ordinary files. `neovim.nix` bakes the
+tree into the editor's wrapper, so `~/.config/nvim` is not consulted at all -
+edit `nix/turbo/nvim/**` and run `nb`.
 
 ```
 nvim/init.lua                 require("turbo")

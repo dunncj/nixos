@@ -1,18 +1,16 @@
 # turbo's environment as a single package.
 #
-# `nix profile install github:dunncj/nixos#turbo`, `nix shell`, or
+# `nix profile install github:dunncj/nixos?dir=nix#turbo`, `nix shell`, or
 # `nix run .#turbo -- nvim` puts the whole toolchain on any machine with nix,
-# NixOS or not, without home-manager and without touching $HOME.
+# NixOS or not, and now brings its config with it.
 #
-# What this can and cannot do, honestly:
+# Everything that has config carries it inside its own wrapper - the editor
+# via ./neovim.nix, and git/tmux/starship via ./wrappers.nix - so this package
+# needs nothing in $HOME and nothing in /etc.
 #
-#   - The editor is complete. ./neovim.nix bakes its plugins, lua tree and
-#     language servers into the wrapper, so it behaves identically here and
-#     under home-manager.
-#   - The CLI tools are complete: the same ./tools.nix list the module uses.
-#   - The *dotfiles* are not here. zsh, git and tmux read their config from
-#     $HOME, and writing to $HOME is an activation step, not something a
-#     derivation may do. For those, use the module in ./home.nix.
+# The one exception is zsh: a login shell reads ~/.zshrc or /etc/zshrc, and a
+# derivation may write neither. ./system.nix supplies that through the NixOS
+# zsh module. Everything else here is self-contained.
 {
   pkgs,
   flakePath ? null,
@@ -21,14 +19,20 @@
 
 let
   neovim = pkgs.callPackage ./neovim.nix { inherit flakePath hostName; };
+  wrappers = pkgs.callPackage ./wrappers.nix { };
 in
 pkgs.buildEnv {
   name = "turbo-env";
 
-  paths = (import ./tools.nix pkgs) ++ [ neovim ];
+  paths = (import ./tools.nix pkgs) ++ [
+    neovim
+    wrappers.git
+    wrappers.tmux
+    wrappers.starship
+  ];
 
   meta = {
-    description = "turbo's editor and CLI environment as one package";
+    description = "turbo's editor, tools and config as one package";
     platforms = pkgs.lib.platforms.unix;
   };
 }

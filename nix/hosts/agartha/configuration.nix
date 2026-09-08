@@ -59,7 +59,6 @@
   time.timeZone = "America/New_York";
 
   programs.steam.enable = true;
-  programs.zsh.enable = true; # required: it is turbo's login shell
   security.sudo.wheelNeedsPassword = false;
 
   virtualisation.docker = {
