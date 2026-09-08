@@ -97,6 +97,16 @@ in
       packages = [ env ];
     };
 
+    # zsh runs zsh-newuser-install on every interactive start when the user has
+    # none of .zshenv/.zprofile/.zshrc/.zlogin - which is the state that removing
+    # home-manager left behind, since it owned those files. The real config is in
+    # /etc/zshrc and is read first; this one only has to exist.
+    #
+    # `f` creates it once and never rewrites it, so anything added by hand stays.
+    systemd.tmpfiles.rules = [
+      "f ${config.users.users.turbo.home}/.zshrc 0644 turbo users - # personal zsh additions - system config lives in /etc/zshrc, from nix/turbo/system.nix"
+    ];
+
     programs.zsh = {
       enable = true; # also required before zsh may be turbo's login shell
 
