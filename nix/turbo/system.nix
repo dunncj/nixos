@@ -68,7 +68,27 @@ in
       ]
       ++ cfg.extraGroups;
 
+      # Declared here so access is reproducible from the repo alone.
+      #
+      # These three were previously only in ~/.ssh/authorized_keys, which is
+      # untracked and gitignored - every working way into this host depended on
+      # one file no rebuild could restore. sshd reads both that file and
+      # /etc/ssh/authorized_keys.d/turbo, so listing them here is purely
+      # additive and leaves the existing path untouched.
       openssh.authorizedKeys.keys = [
+        # Cameron's MacBook - the day-to-day way in.
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPZ/zuXWvni75yWM7lyCpdAPIguxBc46PCzq+6TGnYt camerondunn@Camerons-MacBook-Pro-3811"
+
+        # The tunnel. This is the out-of-band path: it reaches shambhala over
+        # wg0, which is independent of tailscale and headscale, so it still
+        # works if the control plane is down. Do not drop it.
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMnlt2+DsFUHwc2Szr1R0L1lnfmtpxKw/rTGqAohETlo root@agartha-tunnel"
+
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPx+ga2HMIrdfP+qbCYWEyWHWtXCTtX46aibp9iOt8dA turbo25037@gmail.com"
+
+        # Kept because no private key for it was found on this host and its
+        # whereabouts are unknown - removing it is the only change here with
+        # any lockout risk at all.
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILRrMGvIUXrzbm74iexuJz3HM+/NXPQnnQPDcLZ/CdYL turbo@shambhala"
       ];
 
