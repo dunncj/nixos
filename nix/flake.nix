@@ -155,8 +155,9 @@
       #
       # It takes none of shambhala's server modules, and that is not an
       # oversight: k3s.nix pins the node name to `agartha` and owns that
-      # cluster's volumes, power.nix forbids sleep on a machine that should be
-      # allowed to sleep, and sunshine.nix exists only to fake a monitor for
+      # cluster's volumes, power.nix also disables locking and blanking on a
+      # machine someone sits at (myosis copies only its no-sleep half into
+      # its configuration.nix), and sunshine.nix exists only to fake a monitor for
       # headless capture - it hardcodes shambhala's AMD GPU at PCI 0000:03:00.0
       # and is meaningless where a real panel is plugged in.
       nixosConfigurations.${myosis.hostName} = mkLinuxHost myosis {

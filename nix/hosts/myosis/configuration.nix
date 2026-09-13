@@ -3,10 +3,11 @@
 # disk.
 #
 # Deliberately not shambhala's twin. That host is headless and never sat at,
-# which is what justifies its autologin, its never-sleep policy and its
+# which is what justifies its autologin, its never-lock policy and its
 # synthetic-EDID Sunshine hack. Someone is sat at this one, so it takes the
 # desktop and the turbo environment and none of the server modules - see
-# ../../flake.nix for the module list and why.
+# ../../flake.nix for the module list and why. It does share one thing: it
+# never sleeps (below).
 #
 # Rebuild with `nb` (see ../../modules/rebuild.nix).
 { lib, pkgs, ... }:
@@ -25,6 +26,22 @@
   # partway through installing the bootloader, which is a bad moment to run out
   # of disk. Three leaves room to roll back twice.
   boot.loader.systemd-boot.configurationLimit = 3;
+
+  # Never sleep: a suspended box drops off the mesh until someone wakes it.
+  # This is only the sleep half of ../../modules/power.nix. Its no-lock and
+  # no-blank settings exist for Sunshine on a headless server, and someone
+  # sits at this machine, so the screen still locks and blanks as usual.
+  systemd.targets = {
+    sleep.enable = false;
+    suspend.enable = false;
+    hibernate.enable = false;
+    hybrid-sleep.enable = false;
+  };
+  services.logind.settings.Login = {
+    IdleAction = "ignore";
+    HandleSuspendKey = "ignore";
+    HandleHibernateKey = "ignore";
+  };
 
   networking.hostName = "myosis";
 
