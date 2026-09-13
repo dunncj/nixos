@@ -138,29 +138,6 @@
         ];
       };
 
-      # Cameron's workstation. Desktop and the turbo environment, none of
-      # shambhala's server modules (k3s, sunshine, power) - see
-      # hosts/myosis/configuration.nix for why.
-      nixosConfigurations.${myosis.hostName} = nixpkgs.lib.nixosSystem {
-        system = linuxSystem;
-
-        modules = [
-          ./hosts/myosis/configuration.nix
-
-          ./modules/base.nix
-          ./modules/desktop.nix
-          ./modules/nvidia.nix
-          ./modules/docker.nix
-          ./modules/wireguard.nix
-          ./modules/rebuild.nix
-
-          self.nixosModules.turbo
-          {
-            turbo = { inherit (myosis) flakePath hostName; };
-          }
-        ];
-      };
-
       # Cameron's MacBook. No NixOS-style users.users.turbo module here - it
       # is nix-darwin, so the portable unit is consumed as a plain package
       # instead of imported as a module. See hosts/amarout/configuration.nix.

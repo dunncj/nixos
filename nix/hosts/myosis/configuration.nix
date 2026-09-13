@@ -9,10 +9,15 @@
 # ../../flake.nix for the module list and why.
 #
 # Rebuild with `nb` (see ../../modules/rebuild.nix).
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 
 {
   imports = [ ./hardware-configuration.nix ];
+
+  # LTS kernel rather than base.nix's linuxPackages_latest: the out-of-tree
+  # NVIDIA module lags new kernels, and 7.2 + driver 595 froze the desktop
+  # (see ../../modules/nvidia.nix). 6.18 + 580 is the known-good pair.
+  boot.kernelPackages = lib.mkForce pkgs.linuxPackages;
 
   # The ESP here is the 200 MB one Windows created, not a roomy NixOS-sized
   # one, and it is already ~45% full. An NVIDIA initrd is not small, so the

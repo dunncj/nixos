@@ -15,6 +15,10 @@
   # Also blacklists nouveau, so the two drivers cannot both claim the card.
   services.xserver.videoDrivers = [ "nvidia" ];
 
+  # The last known-good generation (kernel 6.18 + driver 580) booted with
+  # this; newer nixpkgs no longer adds it. Kept so 580 binds exactly as it did.
+  boot.kernelParams = [ "nvidia.NVreg_OpenRmEnableUnsupportedGpus=1" ];
+
   hardware.graphics = {
     enable = true;
     # 32-bit GL, for wine and for anything from Steam's back catalogue.
@@ -37,10 +41,11 @@
     # hooks only add ways for a resume to come back with a black screen.
     powerManagement.enable = false;
 
-    # 580.119.02 in this pinned nixpkgs. `production` rather than `latest`
-    # (590.48.01) on purpose - both support Blackwell, and this is the branch
-    # that gets fixes rather than features. Switch to
-    # `nvidiaPackages.latest` if a newer card or a DSC fix needs it.
-    package = config.boot.kernelPackages.nvidiaPackages.production;
+    # Pinned to the 580 branch. After nixpkgs moved to unstable (2026-09),
+    # `production` became 595.99.02, and on this card + HDMI FRL/DSC panel it
+    # logged Xid 56 at login and then KWin page flips timed out every second,
+    # freezing the desktop. 580 on kernel 6.18 ran clean. Try
+    # `nvidiaPackages.latest` again once a newer branch fixes it.
+    package = config.boot.kernelPackages.nvidiaPackages.legacy_580;
   };
 }
