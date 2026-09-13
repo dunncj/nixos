@@ -152,6 +152,9 @@
           ./modules/k3s.nix
           ./modules/sunshine.nix
           ./modules/power.nix
+
+          # shambhala only, on purpose - see the module header.
+          ./modules/autoupgrade.nix
         ];
       };
 
