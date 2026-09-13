@@ -32,6 +32,31 @@ in
     "L+ /etc/nixos - - - - ${cfg.flakePath}"
   ];
 
+  # This repo is rooted at $HOME with the flake in a subdirectory, so a bare
+  # `.#` typed inside ~/nix resolves to git+file:///home/turbo?dir=nix. That
+  # has two costs, and `nb` only ever avoided them by spelling out `path:`:
+  #
+  #   - the flake source becomes the whole tracked home tree. ~/nix is 280K;
+  #     ~/archive is 7.5M, and all of it is copied into the store to evaluate
+  #     a NixOS config that does not reference a byte of it.
+  #   - "warning: Git tree '/home/turbo' is dirty" on every command, because
+  #     the dirty check covers the entire repo. An uncommitted note in
+  #     ~/archive makes a rebuild of shambhala look unclean.
+  #
+  # `nixos` as a registry alias means `nix build nixos#...`, `nix flake check
+  # nixos` and friends get the path: form without anyone having to remember
+  # it, from any directory.
+  nix.registry.nixos.to = {
+    type = "path";
+    path = cfg.flakePath;
+  };
+
+  # With the alias above, the remaining dirty warnings come from typing `.#`
+  # inside the repo, where they say nothing useful: `path:` builds ignore git
+  # entirely, so "dirty" is not a statement about what is being built. The
+  # committed-ness of the tree is what `git status` is for.
+  nix.settings.warn-dirty = false;
+
   # Replaces the old alias `sudo nixos-rebuild switch --flake ~/nix#$(hostname)`,
   # which got two things wrong:
   #
@@ -53,6 +78,11 @@ in
         FLAKE_DIR=${cfg.flakePath}
         FLAKE="path:$FLAKE_DIR#${cfg.hostName}"
 
+        # Empty when turbo.flakeUrl is unset, which is what `nb pull` checks.
+        # Kept as a shell variable rather than a nix conditional around the
+        # case arm so the script below stays literal and readable.
+        FLAKE_URL="${lib.optionalString (cfg.flakeUrl != null) cfg.flakeUrl}"
+
         usage() {
             echo "nb - rebuild NixOS (${cfg.hostName}) from $FLAKE_DIR"
             echo
@@ -60,6 +90,7 @@ in
             echo "  nb boot       build + set as boot default, do not activate"
             echo "  nb test       build + activate now, do NOT touch the bootloader"
             echo "  nb dry        show what activating would change, change nothing"
+            echo "  nb pull       switch to what is on GitHub, ignoring this checkout"
             echo "  nb update     update flake inputs, then switch"
             echo "  nb rollback   activate the previous generation"
             echo "  nb diff       diff the working tree against the running system"
@@ -135,6 +166,22 @@ in
                 ;;
             dry)
                 nixos-rebuild dry-activate --flake "$FLAKE" "$@"
+                ;;
+            pull)
+                # Deliberately not a git pull. nixos-rebuild fetches the flake
+                # itself, so this builds exactly what is on the default branch
+                # regardless of what the local checkout says -- including on a
+                # machine that has no checkout at all. It never touches
+                # $FLAKE_DIR, so `nb pull` and a dirty working tree cannot
+                # silently fight over which source won.
+                if [ -z "$FLAKE_URL" ]; then
+                    echo "nb: turbo.flakeUrl is not set on this host" >&2
+                    exit 1
+                fi
+                echo ":: building $FLAKE_URL#${cfg.hostName}"
+                # --refresh so a cached flake ref does not pin an old commit.
+                nixos-rebuild switch --flake "$FLAKE_URL#${cfg.hostName}" --refresh "$@"
+                post_activate
                 ;;
             update)
                 nix flake update --flake "path:$FLAKE_DIR"

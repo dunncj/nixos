@@ -38,6 +38,20 @@ in
       '';
     };
 
+    flakeUrl = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "github:dunncj/nixos?dir=nix";
+      description = ''
+        Where this flake lives upstream, for `nb pull`. A flake reference is
+        all nixos-rebuild needs -- a machine can switch straight from GitHub
+        with no checkout, no git, and no working tree to be out of date.
+
+        Leave null to drop `nb pull`; the local path-based commands do not
+        depend on it.
+      '';
+    };
+
     hostName = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;

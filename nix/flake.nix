@@ -35,6 +35,11 @@
       # firewall's isolation rules and the sops recipient list.
       registry = import ./nodes.nix;
 
+      # Where this flake lives upstream. Host-independent, which is the point:
+      # `nb pull` on any machine switches to what is on the default branch
+      # without a checkout, a git binary or an up-to-date working tree.
+      flakeUrl = "github:dunncj/nixos?dir=nix";
+
       # flakePath and hostName are the only host-dependent knobs the turbo
       # environment has; they tell nixd which flake and which host to evaluate
       # for NixOS option completion. Both Linux hosts share a flakePath because
@@ -104,7 +109,7 @@
             {
               turbo = {
                 inherit (host) flakePath hostName;
-                inherit extraGroups;
+                inherit extraGroups flakeUrl;
               };
             }
           ]
