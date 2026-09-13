@@ -52,6 +52,17 @@ in
       description = "Where this flake lives on the node, for the `mesh` command to edit.";
     };
 
+    flakeUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "github:dunncj/nixos?dir=nix";
+      description = ''
+        Where this flake lives upstream. `mesh deploy` tells each node to
+        switch to this reference, so every host builds the same commit and no
+        machine's working tree -- including the one running the command --
+        decides what the others get.
+      '';
+    };
+
     self = lib.mkOption {
       type = lib.types.str;
       example = "shambhala";
@@ -196,7 +207,7 @@ in
     # The registry is only as good as the tool that maintains it; ship them
     # together so a node can never have one without the other.
     environment.systemPackages = [
-      (pkgs.callPackage ./mesh-cli.nix { inherit (cfg) flakePath; })
+      (pkgs.callPackage ./mesh-cli.nix { inherit (cfg) flakePath flakeUrl; })
     ];
 
     # --- sshd ---------------------------------------------------------------

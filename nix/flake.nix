@@ -138,6 +138,7 @@
       # not need its own output, it sets the turbo.* options instead.
       packages.${linuxSystem} = turboPackages linuxSystem shambhala // {
         mesh = linuxPkgs.callPackage ./modules/mesh-cli.nix {
+          inherit flakeUrl;
           inherit (shambhala) flakePath;
         };
       };

@@ -26,6 +26,7 @@
   coreutils,
   jq,
   flakePath,
+  flakeUrl,
 }:
 
 writeShellApplication {
@@ -46,6 +47,7 @@ writeShellApplication {
 
   text = ''
     FLAKE_DIR=${flakePath}
+    FLAKE_URL="${flakeUrl}"
     REGISTRY="$FLAKE_DIR/nodes.nix"
     SOPS_CONFIG="$FLAKE_DIR/.sops.yaml"
     SECRETS="$FLAKE_DIR/secrets/secrets.yaml"
@@ -66,9 +68,10 @@ writeShellApplication {
       mesh known-hosts    print the registry's pinned host keys to stdout
       mesh rotate         generate a new mesh key, re-encrypt, and remind you
                           which machines must be rebuilt before which
-      mesh deploy         build every trusted NixOS node here, from this tree,
-                          and copy the closure to it -- the remote needs no
-                          checkout and does no building
+      mesh deploy         tell every trusted NixOS node to switch to the
+                          default branch now, then do the same here. Each node
+                          builds it; nothing is copied between machines and no
+                          machine's working tree is deployed
 
     Only public material is ever written to the repo. The mesh private key
     lives in nix/secrets/secrets.yaml, encrypted to the host keys listed in
@@ -263,18 +266,31 @@ writeShellApplication {
         echo "   the admin keys in nodes.nix remain valid throughout."
     }
 
-    # Build every node's system here, then copy the closure to it.
+    # Tell every node to build the default branch, and build it here too.
     #
-    # The previous version ssh'd in and ran `nixos-rebuild --flake
-    # path:$FLAKE_DIR#$name` on the remote. That reads the *remote's* copy of
-    # this flake, because the path is resolved where the command runs -- so
-    # `mesh deploy` quietly deployed whatever each machine happened to have
-    # checked out, which is the opposite of what a deploy command is for. It
-    # also required every node to hold a checkout at the same path and to be
-    # able to evaluate it.
+    # This has now been wrong twice, so both failures are worth recording.
     #
-    # --target-host builds from THIS tree and ships the result, so one source
-    # of truth reaches every node and a laptop never has to build a kernel.
+    # It originally ran `nixos-rebuild --flake path:$FLAKE_DIR#$name` over ssh.
+    # A path: is resolved where the command runs, so that deployed whatever the
+    # remote happened to have checked out -- a deploy command that deploys a
+    # different source per host.
+    #
+    # The fix for that was --target-host, building every host here and copying
+    # the closures over. That fails on a live run:
+    #
+    #   error: cannot add path '...' because it lacks a signature by a
+    #          trusted key
+    #
+    # The receiving daemon will not accept store paths from a user who is not
+    # in trusted-users, and the ways to satisfy it are to grant turbo
+    # root-equivalent nix trust on every host, to sign the closures, or to copy
+    # as root -- which mesh.nix forbids with PermitRootLogin = "no".
+    #
+    # So: each node builds $FLAKE_URL itself. Every host compiles the same
+    # commit rather than receiving it, nothing new is trusted anywhere, and the
+    # source is the default branch rather than any machine's working tree --
+    # including this one's. It is exactly what nixos-upgrade.timer does on each
+    # host overnight, done now and in a known order.
     cmd_deploy() {
         local self
         self="$(hostname)"
@@ -295,15 +311,39 @@ writeShellApplication {
             esac
 
             echo ":: $name"
-            nixos-rebuild switch \
-                --flake "path:$FLAKE_DIR#$name" \
-                --target-host "turbo@$addr" \
-                --sudo \
-                || echo "   FAILED (unreachable, or not yet holding the mesh key)"
+            # Detached, because this switch restarts sshd and tailscaled and
+            # the connection carrying it may not survive. Left attached, a
+            # dropped link kills activation partway through. The PATH is load
+            # bearing: nixos-rebuild shells out to coreutils and a transient
+            # unit gets almost none.
+            # shellcheck disable=SC2029
+            ssh -n "turbo@$addr" "
+                sudo systemctl reset-failed mesh-deploy 2>/dev/null || true
+                sudo systemd-run --unit=mesh-deploy --service-type=oneshot \
+                    --property=RemainAfterExit=yes \
+                    --setenv=PATH=/run/wrappers/bin:/run/current-system/sw/bin \
+                    --property=StandardOutput=journal \
+                    --property=StandardError=journal \
+                    /run/current-system/sw/bin/nixos-rebuild switch \
+                        --flake '$FLAKE_URL#$name' --refresh
+            " >/dev/null 2>&1 || true
+
+            # systemd-run's own connection dies with the switch, so its exit
+            # status says nothing. Ask the unit instead.
+            while ssh -n "turbo@$addr" 'systemctl is-active --quiet mesh-deploy' 2>/dev/null; do
+                sleep 10
+            done
+            if ssh -n "turbo@$addr" 'systemctl is-failed --quiet mesh-deploy' 2>/dev/null; then
+                echo "   FAILED -- ssh $name 'journalctl -u mesh-deploy -n 40'"
+            else
+                echo "   ok    $(ssh -n "turbo@$addr" 'readlink -f /run/current-system' 2>/dev/null | sed 's#.*-nixos-system-##')"
+            fi
         done
 
+        # Local last, so a broken deploy is noticed on the other machines
+        # before it takes out the one running the command.
         echo ":: local"
-        sudo nixos-rebuild switch --flake "path:$FLAKE_DIR#$self"
+        sudo nixos-rebuild switch --flake "$FLAKE_URL#$self" --refresh
     }
 
     case "''${1:-}" in
