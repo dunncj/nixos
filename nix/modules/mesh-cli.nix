@@ -91,22 +91,34 @@ writeShellApplication {
     # so a loop that stops at hostKey would silently read "<key>\t<system>" as
     # the host key and write that into known_hosts.
     read_registry() {
+        # builtins only, deliberately. This used to reach for nixpkgs' lib via
+        # `import <nixpkgs> {}`, which made every subcommand depend on NIX_PATH
+        # being set in the ambient environment. That is true in a login shell
+        # and false almost everywhere else, so `mesh` worked when typed and
+        # failed from a systemd unit, a timer or a non-interactive ssh with
+        # nothing but "could not evaluate nodes.nix" to show for it. Nothing
+        # here needs more than builtins.
+        #
+        # getAttr rather than r.nodes.<n>, because this whole script is a Nix
+        # indented string and a literal dollar-brace would be interpolated by
+        # Nix before the shell ever saw it.
+        #
         # The trailing newline is load-bearing: nix eval --raw does not add
         # one, and the read loops below discard a final line that lacks it,
         # which silently drops whichever node sorts last.
         nix eval --impure --raw --expr "
           let
             r = import $REGISTRY;
-            l = (import <nixpkgs> {}).lib;
-            names = n: v: l.concatStringsSep \",\"
+            names = n: v: builtins.concatStringsSep \",\"
               ([ n (n + \".\" + r.domain) ] ++ v.addresses);
-            row = n: v:
+            row = n:
+              let v = builtins.getAttr n r.nodes; in
               n + \"\t\" + (if v.trusted then \"trusted\" else \"untrusted\")
-                + \"\t\" + (l.head v.addresses) + \"\t\" + v.age
+                + \"\t\" + (builtins.head v.addresses) + \"\t\" + v.age
                 + \"\t\" + names n v + \"\t\" + v.hostKey
-                + \"\t\" + v.system;
-          in l.concatMapStrings (s: s + \"\n\") (l.mapAttrsToList row r.nodes)
-        " 2>/dev/null || die "could not evaluate $REGISTRY"
+                + \"\t\" + v.system + \"\n\";
+          in builtins.concatStringsSep \"\" (map row (builtins.attrNames r.nodes))
+        " || die "could not evaluate $REGISTRY"
     }
 
     cmd_list() {
