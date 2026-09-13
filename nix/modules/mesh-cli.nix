@@ -63,7 +63,9 @@ writeShellApplication {
       mesh list           show the registry: who is trusted, and by what key
       mesh check          re-run the flake's registry checks against the tree
       mesh sync <host>    install ~/.ssh/config.mesh and known_hosts.mesh on
-                          a machine this flake does not build (the MacBook)
+                          a machine this flake does not build. Superseded for
+                          amarout by modules/mesh-darwin.nix, which builds the
+                          same thing; kept for a node with no nix at all
       mesh config         print that ssh config to stdout
       mesh known-hosts    print the registry's pinned host keys to stdout
       mesh rotate         generate a new mesh key, re-encrypt, and remind you
@@ -317,7 +319,9 @@ writeShellApplication {
             case "$sys" in
                 *-linux) ;;
                 *)
-                    echo ":: $name -- skipped, $sys is not NixOS (see \`mesh sync\`)"
+                    echo ":: $name -- skipped, $sys needs darwin-rebuild:"
+                    echo "   ssh $name 'sudo darwin-rebuild switch --flake $FLAKE_URL#$name --refresh'"
+                    echo "   (interactive: sudo on macOS asks for a password)"
                     continue
                     ;;
             esac

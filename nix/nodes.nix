@@ -2,10 +2,12 @@
 # they are identified. This file is the single source of truth. Everything
 # else -- authorized_keys, known_hosts, /etc/hosts, ssh client aliases, the
 # firewall's isolation rules and the sops recipient list -- is derived from
-# it by ./modules/mesh.nix. Nothing downstream is edited by hand.
+# it by ./modules/mesh.nix on NixOS and ./modules/mesh-darwin.nix on macOS.
+# Both read this file; neither is edited by hand, and nothing downstream is.
 #
 # Adding a node is one attrset here plus `mesh add-node`, which fills the
-# attrset in for you. See ./modules/mesh.nix for what each field drives.
+# attrset in for you. See ./modules/mesh.nix for what each field drives, and
+# mesh-darwin.nix's header for the four things macOS cannot express.
 #
 # Only public material lives here. Host keys and age recipients are public by
 # construction -- they are what a stranger gets from `ssh-keyscan` -- so this
