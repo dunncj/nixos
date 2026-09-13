@@ -27,6 +27,11 @@
         hostName = "shambhala";
       };
 
+      myosis = {
+        flakePath = "/home/turbo/nix";
+        hostName = "myosis";
+      };
+
       amarout = {
         flakePath = "/Users/turbo/nix";
         hostName = "amarout";
@@ -78,6 +83,29 @@
               inherit (shambhala) flakePath hostName;
               extraGroups = [ "docker" ];
             };
+          }
+        ];
+      };
+
+      # Cameron's workstation. Desktop and the turbo environment, none of
+      # shambhala's server modules (k3s, sunshine, power) - see
+      # hosts/myosis/configuration.nix for why.
+      nixosConfigurations.${myosis.hostName} = nixpkgs.lib.nixosSystem {
+        system = linuxSystem;
+
+        modules = [
+          ./hosts/myosis/configuration.nix
+
+          ./modules/base.nix
+          ./modules/desktop.nix
+          ./modules/nvidia.nix
+          ./modules/docker.nix
+          ./modules/wireguard.nix
+          ./modules/rebuild.nix
+
+          self.nixosModules.turbo
+          {
+            turbo = { inherit (myosis) flakePath hostName; };
           }
         ];
       };

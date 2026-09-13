@@ -1,7 +1,7 @@
 # `nb` - the rebuild entry point for this host, plus the /etc/nixos symlink
 # that keeps a bare `nixos-rebuild` from ever building a stale second copy of
 # the system.
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 
 {
   systemd.tmpfiles.rules = [
@@ -27,7 +27,7 @@
       ];
       text = ''
         FLAKE_DIR=/home/turbo/nix
-        FLAKE="path:$FLAKE_DIR#shambhala"
+        FLAKE="path:$FLAKE_DIR#${config.networking.hostName}"
 
         usage() {
             echo "nb - rebuild NixOS from $FLAKE_DIR"
@@ -112,7 +112,7 @@
                 ;;
             diff)
                 built="$(nix build --no-link --print-out-paths \
-                    "path:$FLAKE_DIR#nixosConfigurations.shambhala.config.system.build.toplevel")"
+                    "path:$FLAKE_DIR#nixosConfigurations.${config.networking.hostName}.config.system.build.toplevel")"
                 nvd diff /run/current-system "$built"
                 ;;
             gc)
