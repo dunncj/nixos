@@ -6,7 +6,7 @@
   nixpkgs.hostPlatform = "aarch64-darwin";
 
   # Who owns the machine config (used by some nix-darwin modules).
-  system.primaryUser = "camerondunn";
+  system.primaryUser = "turbo";
 
   nix.settings.experimental-features = [
     "nix-command"

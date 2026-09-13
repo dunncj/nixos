@@ -28,7 +28,7 @@
       };
 
       amarout = {
-        flakePath = "/Users/camerondunn/nix";
+        flakePath = "/Users/turbo/nix";
         hostName = "amarout";
       };
 
