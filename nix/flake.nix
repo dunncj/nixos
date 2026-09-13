@@ -97,6 +97,10 @@
             ./modules/base.nix
             ./modules/rebuild.nix
 
+            # Every host converges on the default branch rather than drifting
+            # until someone remembers it - see the module header.
+            ./modules/autoupgrade.nix
+
             # The mesh needs sops (for the shared mesh key) and sops needs a
             # host key to decrypt with, which every node already has. Both are
             # unconditional: a node's own trust flag in ./nodes.nix decides
@@ -152,9 +156,6 @@
           ./modules/k3s.nix
           ./modules/sunshine.nix
           ./modules/power.nix
-
-          # shambhala only, on purpose - see the module header.
-          ./modules/autoupgrade.nix
         ];
       };
 
