@@ -41,7 +41,7 @@ in
           publicKey = "WYcYdP/27F0HEAGYWEqvoHfbnWkROfcQ4nqZ4ecMDQQ=";
           endpoint = "178.156.205.76:51820";
           persistentKeepalive = 25;
-          allowedIPs = [ "10.100.0.1/32" ];
+          allowedIPs = [ "10.100.0.0/24" ];
         }
       ];
     };

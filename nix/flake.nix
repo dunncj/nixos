@@ -1,27 +1,29 @@
 {
-  description = "shambhala + amarout - NixOS/nix-darwin configuration, and turbo's portable environment";
+  description = "shambhala + myosis + amarout - NixOS/nix-darwin configuration, and turbo's portable environment";
 
   # No home-manager. The only thing it still did here was write dotfiles into
   # $HOME; those are now system programs writing /etc, which is inert for root
   # because root has none of the binaries that read them. See turbo/system.nix.
   inputs = {
-    # Pinned to the exact rev already running on amarout (see
-    # /etc/nix-darwin/flake.lock there) rather than floating on
-    # nixos-unstable: newer nixos-render-docs (nixpkgs' doc-rendering tool)
-    # dropped a --sidebar-depth flag that nix-darwin/master's manual-html
-    # builder still passes, breaking any darwinConfigurations build. Bump
-    # nixpkgs and nix-darwin together once upstream fixes the mismatch.
-    nixpkgs.url = "github:NixOS/nixpkgs/be5afa0fcb31f0a96bf9ecba05a516c66fcd8114";
-    nix-darwin.url = "github:nix-darwin/nix-darwin/8b720b9662d4dd19048664b7e4216ce530591adc";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nix-darwin.url = "github:nix-darwin/nix-darwin";
     nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
-    { self, nixpkgs, nix-darwin }:
+    {
+      self,
+      nixpkgs,
+      nix-darwin,
+    }:
     let
       linuxSystem = "x86_64-linux";
       darwinSystem = "aarch64-darwin";
 
+      # flakePath and hostName are the only host-dependent knobs the turbo
+      # environment has; they tell nixd which flake and which host to evaluate
+      # for NixOS option completion. Both Linux hosts share a flakePath because
+      # this repo is rooted at $HOME on each of them.
       shambhala = {
         flakePath = "/home/turbo/nix";
         hostName = "shambhala";
@@ -46,44 +48,93 @@
         system: host:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          turbo = import ./turbo/package.nix { inherit pkgs; inherit (host) flakePath hostName; };
+          turbo = import ./turbo/package.nix {
+            inherit pkgs;
+            inherit (host) flakePath hostName;
+          };
         in
         {
           inherit turbo;
           neovim = pkgs.callPackage ./turbo/neovim.nix { inherit (host) flakePath hostName; };
           default = turbo;
         };
+
+      # Everything every NixOS host here gets: the shared base, the `nb` rebuild
+      # command, and turbo's account and environment. `modules` is what makes a
+      # host that host.
+      #
+      # ./modules/desktop.nix is deliberately NOT in here - see its header.
+      mkLinuxHost =
+        host:
+        {
+          modules,
+          extraGroups ? [ ],
+        }:
+        nixpkgs.lib.nixosSystem {
+          system = linuxSystem;
+
+          modules = [
+            ./modules/base.nix
+            ./modules/rebuild.nix
+
+            self.nixosModules.turbo
+            {
+              turbo = {
+                inherit (host) flakePath hostName;
+                inherit extraGroups;
+              };
+            }
+          ]
+          ++ modules;
+        };
     in
     {
       # The portable unit. On another NixOS machine:
       #   imports = [ inputs.shambhala.nixosModules.turbo ];
-      # Nothing in it is specific to this host; set turbo.flakePath,
+      # Nothing in it is specific to any host; set turbo.flakePath,
       # turbo.hostName and turbo.extraGroups there.
       nixosModules.turbo = ./turbo/system.nix;
 
+      # One canonical host per platform, purely so these outputs have a
+      # flakePath/hostName to bake in for nixd. shambhala stands for Linux the
+      # same way amarout stands for darwin; a third machine consuming this does
+      # not need its own output, it sets the turbo.* options instead.
       packages.${linuxSystem} = turboPackages linuxSystem shambhala;
       packages.${darwinSystem} = turboPackages darwinSystem amarout;
 
-      nixosConfigurations.${shambhala.hostName} = nixpkgs.lib.nixosSystem {
-        system = linuxSystem;
-
+      nixosConfigurations.${shambhala.hostName} = mkLinuxHost shambhala {
         modules = [
           # hardware-configuration.nix is imported by configuration.nix, so it
           # is deliberately not listed again here.
           ./hosts/shambhala/configuration.nix
 
-          ./modules/rebuild.nix
+          ./modules/desktop.nix
+          ./modules/docker.nix
+          ./modules/wireguard.nix
+
           ./modules/k3s.nix
           ./modules/sunshine.nix
           ./modules/power.nix
+        ];
+      };
 
-          self.nixosModules.turbo
-          {
-            turbo = {
-              inherit (shambhala) flakePath hostName;
-              extraGroups = [ "docker" ];
-            };
-          }
+      # Cameron's workstation: Intel, NVIDIA, one 4K144 panel, dual-booting
+      # Windows.
+      #
+      # It takes none of shambhala's server modules, and that is not an
+      # oversight: k3s.nix pins the node name to `agartha` and owns that
+      # cluster's volumes, power.nix forbids sleep on a machine that should be
+      # allowed to sleep, and sunshine.nix exists only to fake a monitor for
+      # headless capture - it hardcodes shambhala's AMD GPU at PCI 0000:03:00.0
+      # and is meaningless where a real panel is plugged in.
+      nixosConfigurations.${myosis.hostName} = mkLinuxHost myosis {
+        modules = [
+          ./hosts/myosis/configuration.nix
+
+          ./modules/desktop.nix
+          ./modules/docker.nix
+          ./modules/wireguard.nix
+          ./modules/nvidia.nix
         ];
       };
 

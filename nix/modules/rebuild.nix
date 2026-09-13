@@ -1,11 +1,35 @@
-# `nb` - the rebuild entry point for this host, plus the /etc/nixos symlink
-# that keeps a bare `nixos-rebuild` from ever building a stale second copy of
-# the system.
-{ config, pkgs, ... }:
-
+# `nb` - the rebuild entry point, plus the /etc/nixos symlink that keeps a bare
+# `nixos-rebuild` from ever building a stale second copy of the system.
+#
+# Host-agnostic: the flake path and the attribute to build come from
+# turbo.flakePath and turbo.hostName (declared in ../turbo/system.nix), so this
+# module is correct on shambhala and myosis alike. It used to hardcode
+# shambhala, which on any second host would have silently rebuilt the wrong
+# machine's config.
 {
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+
+let
+  cfg = config.turbo;
+in
+{
+  assertions = [
+    {
+      assertion = cfg.flakePath != null && cfg.hostName != null;
+      message = ''
+        modules/rebuild.nix needs turbo.flakePath and turbo.hostName set, since
+        `nb` has to know which flake and which nixosConfigurations entry to
+        build. Set them where this host is defined in flake.nix.
+      '';
+    }
+  ];
+
   systemd.tmpfiles.rules = [
-    "L+ /etc/nixos - - - - /home/turbo/nix"
+    "L+ /etc/nixos - - - - ${cfg.flakePath}"
   ];
 
   # Replaces the old alias `sudo nixos-rebuild switch --flake ~/nix#$(hostname)`,
@@ -26,11 +50,11 @@
         nix
       ];
       text = ''
-        FLAKE_DIR=/home/turbo/nix
-        FLAKE="path:$FLAKE_DIR#${config.networking.hostName}"
+        FLAKE_DIR=${cfg.flakePath}
+        FLAKE="path:$FLAKE_DIR#${cfg.hostName}"
 
         usage() {
-            echo "nb - rebuild NixOS from $FLAKE_DIR"
+            echo "nb - rebuild NixOS (${cfg.hostName}) from $FLAKE_DIR"
             echo
             echo "  nb [switch]   build + activate now, and set as boot default"
             echo "  nb boot       build + set as boot default, do not activate"
@@ -71,13 +95,24 @@
 
             echo
             echo ":: service check"
+            # Units absent on this host are skipped rather than reported DOWN:
+            # tailscaled exists on shambhala and not on myosis, and a permanent
+            # false alarm trains you to ignore the whole section.
+            checked=false
             for unit in tailscaled sshd dbus; do
+                if ! systemctl cat "$unit" >/dev/null 2>&1; then
+                    continue
+                fi
+                checked=true
                 if systemctl is-active --quiet "$unit"; then
                     echo "   ok    $unit"
                 else
                     echo "   DOWN  $unit"
                 fi
             done
+            if [ "$checked" = false ]; then
+                echo "   --    none of the watched units exist here"
+            fi
 
             if systemctl --failed --no-legend --plain | grep -q .; then
                 echo
@@ -112,7 +147,7 @@
                 ;;
             diff)
                 built="$(nix build --no-link --print-out-paths \
-                    "path:$FLAKE_DIR#nixosConfigurations.${config.networking.hostName}.config.system.build.toplevel")"
+                    "path:$FLAKE_DIR#nixosConfigurations.${cfg.hostName}.config.system.build.toplevel")"
                 nvd diff /run/current-system "$built"
                 ;;
             gc)

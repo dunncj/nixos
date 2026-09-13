@@ -1,22 +1,37 @@
 # nixos
 
-NixOS configuration for **shambhala** — a headless box that runs a Plasma session
-for Sunshine/Moonlight streaming, a single-node k3s server, and a Minecraft
-server.
+One repo for every machine. Three hosts:
+
+| host | what it is |
+|---|---|
+| **shambhala** | headless box: a Plasma session for Sunshine/Moonlight streaming, a single-node k3s server, and a Minecraft server. Never sat in front of. |
+| **myosis** | Cameron's workstation. Intel + NVIDIA, one 4K144 panel, dual-boots Windows. Desktop only — none of shambhala's server modules. |
+| **amarout** | Cameron's MacBook, via nix-darwin. |
+
+Both Linux hosts share `modules/base.nix`, the `nb` rebuild command and the
+`turbo` environment; everything else is per-host and listed in `flake.nix`.
 
 ## Layout
 
 ```
 nix/
-  flake.nix                        inputs + the shambhala system
+  flake.nix                        inputs + every host, via mkLinuxHost
   hosts/shambhala/
-    configuration.nix              boot, desktop, networking, wireguard
+    configuration.nix              autologin, networking, wireguard, steam, docker
     hardware-configuration.nix     generated; do not hand-edit
+  hosts/myosis/
+    configuration.nix              ESP limit, audio, printing, locale
+    hardware-configuration.nix     generated; do not hand-edit
+  hosts/amarout/
+    configuration.nix              the darwin host
   modules/
+    base.nix                       what every NixOS host here gets
+    desktop.nix                    Plasma 6 on Wayland; opt-in per host
     rebuild.nix                    the `nb` command and the /etc/nixos symlink
-    k3s.nix                        single-node k3s server
-    sunshine.nix                   synthetic EDID so headless capture works
-    power.nix                      forbids sleep and display blanking
+    nvidia.nix                     proprietary driver, for 4K144 (myosis)
+    k3s.nix                        single-node k3s server (shambhala)
+    sunshine.nix                   synthetic EDID so headless capture works (shambhala)
+    power.nix                      forbids sleep and display blanking (shambhala)
   turbo/tools.nix                  plain CLI tools
   turbo/wrappers.nix               git/tmux/starship with config baked in
   turbo/neovim.nix                 the editor as one derivation
@@ -29,6 +44,13 @@ archive/titan/                     previous host's config; not built by anything
 ```
 
 ## Layering
+
+A host config holds only what is true of that host. Anything both Linux hosts
+set to the same value lives in `modules/base.nix`; anything optional but shared
+is its own module a host opts into (`desktop.nix`, `nvidia.nix`). The
+`mkLinuxHost` helper in `flake.nix` gives every NixOS host `base.nix`,
+`rebuild.nix` and the `turbo` module, so a new machine is a hostname, a hardware
+config and a short module list.
 
 The system config stays as minimal as it can be. Root gets no conveniences -
 no git, no editor, no tmux, no starship. Everything turbo works with lives in
@@ -58,10 +80,45 @@ nb diff       diff the working tree against the running system
 nb gc         delete generations older than 14 days
 ```
 
+`nb` builds whichever host it is installed on — it reads `turbo.flakePath` and
+`turbo.hostName`, so the same module is correct everywhere. It used to hardcode
+`shambhala`, which on a second host would have quietly rebuilt the wrong
+machine.
+
 `nb` wraps `nixos-rebuild` for two reasons: it uses `path:` rather than a bare
 `~/nix` so nix does not copy this whole repo into the store on every build, and
 it re-execs systemd afterwards so a dbus restart cannot leave `reboot` silently
 doing nothing.
+
+## myosis and the 4K144 panel
+
+The monitor is an Acer XB273K V6 on HDMI. It will do 3840x2160@144, but only on
+the proprietary NVIDIA driver, and the reason is worth writing down because the
+symptom looks like a monitor or cable fault rather than a driver one.
+
+The panel's DisplayID block advertises 4K@144 at a **1278.72 MHz** pixel clock
+(and a 4K@160 overclock mode at 1395.99 MHz). HDMI 2.0 TMDS tops out at 600 MHz,
+so those modes are reachable only over HDMI 2.1 FRL with DSC. The EDID confirms
+the sink supports both — its HDMI Forum VSDB reports `Supports VESA DSC 1.2a`
+and FRL up to 12 Gbps on 4 lanes.
+
+nouveau implements neither FRL nor DSC. So on nouveau the highest 4K mode the
+kernel will even enumerate is VIC 97, 3840x2160@60 at 594 MHz — which is exactly
+the 60 Hz ceiling you see. Nothing is wrong with the cable or the display.
+`modules/nvidia.nix` is what lifts it.
+
+`hardware.nvidia.open = true` in that module is mandatory rather than a
+preference: this is a Blackwell card (RTX 50-series, GB2xx) and the closed kernel
+module has no support for those chips at all.
+
+One wart: the *chosen* mode is not declarative. KWin stores it per-output under
+`~/.local/share/kscreen/`, and there is no home-manager here to own that file.
+Set it once and Plasma remembers:
+
+```
+kscreen-doctor output.HDMI-A-1.mode.3840x2160@144
+kscreen-doctor output.HDMI-A-1.scale.1.5     # 4K at 1.5 => a 2560x1440 desktop
+```
 
 ## The turbo environment
 

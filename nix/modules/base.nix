@@ -40,10 +40,5 @@
   services.tailscale.enable = true;
   networking.firewall.allowedUDPPorts = [ 41641 ]; # tailscale
 
-  # Claude Code CLI - runs latest version via npx
-  environment.systemPackages = [
-    (pkgs.writeShellScriptBin "claude" ''
-      exec ${pkgs.nodejs}/bin/npx -y @anthropic-ai/claude-code "$@"
-    '')
-  ];
+  environment.systemPackages = [ pkgs.claude-code ];
 }
