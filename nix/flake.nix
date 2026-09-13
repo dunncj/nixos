@@ -195,6 +195,12 @@
         modules = [
           ./hosts/amarout/configuration.nix
           ./modules/rebuild-darwin.nix
+
+          # The same shell the Linux hosts get. turbo/system.nix cannot be
+          # imported here - it is a NixOS module - so the portable half of it
+          # is its own file and both platforms import that.
+          ./turbo/shell.nix
+
           {
             environment.systemPackages = [ self.packages.${darwinSystem}.turbo ];
           }

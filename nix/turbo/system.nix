@@ -26,6 +26,11 @@ let
   };
 in
 {
+  # The cross-platform half of turbo's shell. nix-darwin imports the same file
+  # directly from ../flake.nix, which is what keeps the MacBook's zsh identical
+  # to the Linux boxes' rather than merely similar.
+  imports = [ ./shell.nix ];
+
   options.turbo = {
     flakePath = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
@@ -104,9 +109,11 @@ in
       "f ${config.users.users.turbo.home}/.zshrc 0644 turbo users - # personal zsh additions - system config lives in /etc/zshrc, from nix/turbo/system.nix"
     ];
 
+    # The rest of the shell - aliases, keybindings, EDITOR, the direnv hook and
+    # the starship prompt - is in ./shell.nix, imported above, because the
+    # MacBook needs the same thing and cannot import this file. What is left
+    # here is the part with no nix-darwin equivalent.
     programs.zsh = {
-      enable = true; # also required before zsh may be turbo's login shell
-
       histSize = 10000;
       setOptions = [
         "HIST_IGNORE_DUPS"
@@ -116,48 +123,6 @@ in
 
       autosuggestions.enable = true;
       syntaxHighlighting.enable = true;
-
-      shellAliases = {
-        ll = "eza -la --git";
-        gs = "git status";
-        gc = "git commit";
-        gco = "git checkout";
-        v = "nvim";
-
-        # /etc/rancher/k3s/k3s.yaml is root-only, so the kubeconfig exported
-        # in ../modules/k3s.nix is unreadable as turbo; go through k3s itself.
-        k = "sudo k3s kubectl";
-      };
-
-      interactiveShellInit = ''
-        # Set here rather than environment.sessionVariables so they stay with
-        # turbo's shell instead of applying to root as well.
-        export EDITOR=nvim
-        export PAGER='less -FRX'
-
-        # Emacs keys, explicitly: EDITOR is a vi-ish name, which would
-        # otherwise make zsh pick vi mode.
-        bindkey -e
-
-        # Match the tokyonight background the editor uses.
-        printf '\e]11;#1a1b26\a'
-
-        # direnv lives in turbo's profile, not the system one, so this file is
-        # read by shells that may not have it (a rescue zsh as root). Guard
-        # rather than spew errors.
-        if command -v direnv >/dev/null; then
-          eval "$(direnv hook zsh)"
-        fi
-      '';
-
-      # Must be promptInit, not interactiveShellInit: the module's default
-      # promptInit runs `prompt suse` afterwards, which would overwrite
-      # anything starship set.
-      promptInit = ''
-        if command -v starship >/dev/null; then
-          eval "$(starship init zsh)"
-        fi
-      '';
     };
 
   };
