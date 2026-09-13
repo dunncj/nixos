@@ -342,7 +342,19 @@ writeShellApplication {
 
             # systemd-run's own connection dies with the switch, so its exit
             # status says nothing. Ask the unit instead.
-            while ssh -n "turbo@$addr" 'systemctl is-active --quiet mesh-deploy' 2>/dev/null; do
+            #
+            # Poll ActiveState, NOT `is-active`. RemainAfterExit=yes is what
+            # makes the result readable after the switch finishes, and its
+            # cost is that a succeeded oneshot stays "active" forever -- so
+            # `while is-active` never terminates. The first version of this
+            # did exactly that and hung after the first node, while the node
+            # itself had finished in eighteen seconds.
+            #
+            # oneshot + RemainAfterExit gives three states worth distinguishing:
+            # activating while it runs, active on success, failed on failure.
+            # An unreachable host yields an empty string, which also ends the
+            # loop rather than spinning forever on a machine that went away.
+            while [ "$(ssh -n "turbo@$addr" 'systemctl show mesh-deploy -p ActiveState --value' 2>/dev/null)" = activating ]; do
                 sleep 10
             done
             if ssh -n "turbo@$addr" 'systemctl is-failed --quiet mesh-deploy' 2>/dev/null; then
