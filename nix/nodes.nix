@@ -82,7 +82,7 @@
     };
 
     amarout = {
-      description = "Cameron's MacBook Pro. nix-darwin, not NixOS -- ../hosts/amarout builds it, but modules/mesh.nix does not apply; see `mesh sync` for its ssh config.";
+      description = "Cameron's MacBook Pro. nix-darwin, not NixOS -- its half of the mesh is modules/mesh-darwin.nix.";
       aliases = [ "ama" ];
       trusted = true;
       system = "aarch64-darwin";

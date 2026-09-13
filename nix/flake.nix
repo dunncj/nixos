@@ -222,9 +222,8 @@
       # is nix-darwin, so the portable unit is consumed as a plain package
       # instead of imported as a module. See hosts/amarout/configuration.nix.
       #
-      # It is in ./nodes.nix as a trusted node, but modules/mesh.nix is a NixOS
-      # module and does not apply here: the MacBook takes its half of the mesh
-      # as generated ssh config, via `mesh config` and `mesh known-hosts`.
+      # The mesh comes from ./modules/mesh-darwin.nix rather than mesh.nix,
+      # which is NixOS-only; both read the same ./nodes.nix.
       darwinConfigurations.${amarout.hostName} = nix-darwin.lib.darwinSystem {
         system = darwinSystem;
         specialArgs = { inherit self; };
@@ -232,6 +231,9 @@
         modules = [
           ./hosts/amarout/configuration.nix
           ./modules/rebuild-darwin.nix
+
+          ./modules/mesh-darwin.nix
+          { mesh.self = amarout.hostName; }
 
           # The same shell the Linux hosts get. turbo/system.nix cannot be
           # imported here - it is a NixOS module - so the portable half of it
