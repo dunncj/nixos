@@ -25,6 +25,10 @@
   # Peer address on the wg0 tunnel; the rest is in ../../modules/wireguard.nix.
   tunnel.address = "10.100.0.2/24";
 
+  # This host's wg key. It used to live at /etc/wireguard/private.key mode
+  # 0644 -- world readable, so every user on the box could take the tunnel.
+  tunnel.privateKeySecret = "wireguard/private_key";
+
   time.timeZone = "America/New_York";
 
   # Pins stateful defaults to the release this host was installed from.

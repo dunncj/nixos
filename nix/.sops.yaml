@@ -1,0 +1,30 @@
+# Who can decrypt nix/secrets/*. Every entry is an age recipient derived from
+# a node's ssh *host* key (`ssh-to-age`), which is why no node needs a second
+# bootstrap key: if it is in the tailnet, it already has the identity that
+# opens these files.
+#
+# Keep this list in step with `trusted = true` in nix/nodes.nix. `mesh
+# add-node` does that for you and re-encrypts; `mesh check` fails if the two
+# ever drift apart.
+keys:
+  # turbo, from ~/.config/sops/age/keys.txt. Present so secrets can be edited
+  # from a checkout without root on any particular machine. Not in the repo.
+  - &admin      age1sjuka6w004cvyv6w2r3nx96xxnlj9ljf93q3fkyxs6hx6rx93dgqw8dld7
+
+  # Trusted nodes, by host key.
+  - &shambhala  age1slavqyrel6x6hnhuv7yc3th0thxwzc9ex9l8hnpujta6za3pkglq2cr8y2
+  - &myosis     age1yglm8xdr2ylrqsql6w4wnw5m3ucynpckn69lk4nhfpmvk89feusqguv9x9
+  - &amarout    age1n26p4eephjfktel06h8a6uwwz2wppww22tna3wrgca3jw70p9ajqtugae0
+
+  # teyos and tunnel are deliberately absent. They are `trusted = false` in
+  # nix/nodes.nix; adding them here would hand the mesh key to the two
+  # internet-facing boxes and undo the whole arrangement.
+
+creation_rules:
+  - path_regex: secrets/[^/]+\.yaml$
+    key_groups:
+      - age:
+          - *admin
+          - *shambhala
+          - *myosis
+          - *amarout

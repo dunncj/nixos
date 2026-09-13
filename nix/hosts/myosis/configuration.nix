@@ -30,9 +30,14 @@
 
   # Peer address on the wg0 tunnel; the rest is in ../../modules/wireguard.nix.
   # Deliberately .3 - shambhala holds .2, and two peers on one address fails
-  # like packet loss rather than like a config error. The matching private key
-  # is NOT in this repo; generate it and place it at /etc/wireguard/private.key,
-  # then add this host's public key to the VPS.
+  # like packet loss rather than like a config error.
+  #
+  # The matching private key is NOT in this repo and has not been generated
+  # yet, so tunnel.privateKeySecret is left null and this host falls back to
+  # /etc/wireguard/private.key. To finish it: generate the key, add its public
+  # half to the VPS, then put the private half in ../../secrets/secrets.yaml as
+  # its own entry -- NOT wireguard/private_key, which is shambhala's. Two peers
+  # sharing one key share a public key and the VPS cannot tell them apart.
   tunnel.address = "10.100.0.3/24";
 
   # No autologin, unlike shambhala: there is a person here, so the login prompt

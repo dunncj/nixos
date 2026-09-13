@@ -19,5 +19,12 @@ pkgs: with pkgs; [
   jq
   ripgrep
   rustup
+
+  # Secrets. sops edits nix/secrets/*, age holds turbo's admin identity in
+  # ~/.config/sops/age/keys.txt, and ssh-to-age turns a node's host key into
+  # the recipient that nix/.sops.yaml wants. See ../modules/mesh-cli.nix.
+  age
+  sops
+  ssh-to-age
   tree
 ]

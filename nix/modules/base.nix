@@ -32,9 +32,10 @@
   # `nb` sudos to itself on every rebuild, and these are single-user machines.
   security.sudo.wheelNeedsPassword = false;
 
-  # How you reach either machine. turbo/system.nix declares the authorized keys,
-  # so sshd here is enough to make a host reachable from the repo alone; NixOS
-  # leaves password auth off by default.
+  # How you reach either machine. ../nodes.nix declares who is authorised and
+  # ./mesh.nix turns that into authorized_keys, so sshd here is enough to make a
+  # host reachable from the repo alone. mesh.nix also narrows
+  # authorizedKeysFiles and turns password auth off explicitly.
   services.openssh.enable = true;
 
   services.tailscale.enable = true;
