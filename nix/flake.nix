@@ -30,6 +30,24 @@
 
       linuxPkgs = nixpkgs.legacyPackages.${linuxSystem};
 
+      # Where the portable `turbo` package is offered. Wider than the systems
+      # this flake builds hosts for, on purpose - see `packages` below.
+      portableSystems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
+
+      # A machine this repo does not build. nixd's NixOS option completion
+      # needs a flake path and a host to evaluate; with neither, it still runs,
+      # it just cannot complete options for a configuration that does not exist
+      # here. turbo/system.nix documents both as nullable for this case.
+      genericHost = {
+        flakePath = null;
+        hostName = null;
+      };
+
       # Who is in the mesh. ./modules/mesh.nix turns this one file into
       # authorized_keys, known_hosts, /etc/hosts, the ssh client aliases, the
       # firewall's isolation rules and the sops recipient list.
@@ -136,13 +154,32 @@
       # flakePath/hostName to bake in for nixd. shambhala stands for Linux the
       # same way amarout stands for darwin; a third machine consuming this does
       # not need its own output, it sets the turbo.* options instead.
-      packages.${linuxSystem} = turboPackages linuxSystem shambhala // {
-        mesh = linuxPkgs.callPackage ./modules/mesh-cli.nix {
-          inherit flakeUrl;
-          inherit (shambhala) flakePath;
-        };
-      };
-      packages.${darwinSystem} = turboPackages darwinSystem amarout;
+      # Built for every platform turbo might plausibly land on, not just the
+      # two this flake builds whole machines for. The portable unit exists
+      # precisely for the third kind of machine - a work laptop, a VPS, a
+      # borrowed box - and an output that does not exist for its architecture
+      # is not portable in any useful sense.
+      #
+      # The two canonical hosts get their flakePath and hostName baked in for
+      # nixd; every other system gets the generic build, which is the same
+      # toolchain minus NixOS option completion it could not use anyway.
+      packages = nixpkgs.lib.genAttrs portableSystems (
+        system:
+        turboPackages system (
+          if system == linuxSystem then
+            shambhala
+          else if system == darwinSystem then
+            amarout
+          else
+            genericHost
+        )
+        // nixpkgs.lib.optionalAttrs (system == linuxSystem) {
+          mesh = linuxPkgs.callPackage ./modules/mesh-cli.nix {
+            inherit flakeUrl;
+            inherit (shambhala) flakePath;
+          };
+        }
+      );
 
       nixosConfigurations.${shambhala.hostName} = mkLinuxHost shambhala {
         modules = [
