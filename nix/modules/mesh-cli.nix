@@ -323,44 +323,71 @@ writeShellApplication {
             esac
 
             echo ":: $name"
-            # Detached, because this switch restarts sshd and tailscaled and
-            # the connection carrying it may not survive. Left attached, a
-            # dropped link kills activation partway through. The PATH is load
-            # bearing: nixos-rebuild shells out to coreutils and a transient
-            # unit gets almost none.
+
+            # What the node is on now, so the report below can say whether the
+            # deploy actually moved it. A deploy tool that cannot tell "already
+            # current" from "did nothing and lied about it" is worse than none:
+            # an earlier version of this reported ok for a node it had not
+            # touched, and the only way to notice was to go and look.
+            local before
+            before=$(ssh -n "turbo@$addr" 'readlink -f /run/current-system' 2>/dev/null || true)
+
+            # `stop` before `reset-failed`, and both before starting. The unit
+            # is a oneshot with RemainAfterExit=yes, so after a successful run
+            # it stays "active" indefinitely -- reset-failed does nothing to a
+            # unit that did not fail, systemd-run then refuses the name because
+            # it is already taken, and the poll below reads the PREVIOUS run's
+            # "active" as this run's success. That is the false ok.
+            #
+            # --no-block so systemd-run returns once the job is queued rather
+            # than waiting out the switch. That keeps its exit status about the
+            # thing we can still act on -- whether the unit started -- instead
+            # of about a connection that is expected to die when sshd and
+            # tailscaled restart. The PATH is load bearing: nixos-rebuild
+            # shells out to coreutils and a transient unit gets almost none.
             # shellcheck disable=SC2029
-            ssh -n "turbo@$addr" "
+            if ! ssh -n "turbo@$addr" "
+                sudo systemctl stop mesh-deploy 2>/dev/null || true
                 sudo systemctl reset-failed mesh-deploy 2>/dev/null || true
-                sudo systemd-run --unit=mesh-deploy --service-type=oneshot \
+                sudo systemd-run --unit=mesh-deploy --no-block --service-type=oneshot \
                     --property=RemainAfterExit=yes \
                     --setenv=PATH=/run/wrappers/bin:/run/current-system/sw/bin \
                     --property=StandardOutput=journal \
                     --property=StandardError=journal \
                     /run/current-system/sw/bin/nixos-rebuild switch \
                         --flake '$FLAKE_URL#$name' --refresh
-            " >/dev/null 2>&1 || true
+            " >/dev/null 2>&1; then
+                echo "   FAILED to start -- unreachable, or sudo/systemd-run refused"
+                continue
+            fi
 
-            # systemd-run's own connection dies with the switch, so its exit
-            # status says nothing. Ask the unit instead.
-            #
-            # Poll ActiveState, NOT `is-active`. RemainAfterExit=yes is what
-            # makes the result readable after the switch finishes, and its
-            # cost is that a succeeded oneshot stays "active" forever -- so
-            # `while is-active` never terminates. The first version of this
-            # did exactly that and hung after the first node, while the node
-            # itself had finished in eighteen seconds.
-            #
-            # oneshot + RemainAfterExit gives three states worth distinguishing:
-            # activating while it runs, active on success, failed on failure.
-            # An unreachable host yields an empty string, which also ends the
-            # loop rather than spinning forever on a machine that went away.
+            # --no-block returns before the job runs, so the unit is briefly
+            # still inactive. Give it a moment rather than reading that as a
+            # finished deploy.
+            sleep 5
+
+            # Poll ActiveState, NOT `is-active`: RemainAfterExit makes a
+            # succeeded oneshot report active forever, so `while is-active`
+            # never terminates. The first version did exactly that and hung
+            # after the first node, which had finished in eighteen seconds.
+            # ActiveState separates the three states that matter: activating
+            # while it runs, active on success, failed on failure. An
+            # unreachable host yields an empty string, which ends the loop
+            # rather than spinning on a machine that went away mid-deploy.
             while [ "$(ssh -n "turbo@$addr" 'systemctl show mesh-deploy -p ActiveState --value' 2>/dev/null)" = activating ]; do
                 sleep 10
             done
+
             if ssh -n "turbo@$addr" 'systemctl is-failed --quiet mesh-deploy' 2>/dev/null; then
                 echo "   FAILED -- ssh $name 'journalctl -u mesh-deploy -n 40'"
             else
-                echo "   ok    $(ssh -n "turbo@$addr" 'readlink -f /run/current-system' 2>/dev/null | sed 's#.*-nixos-system-##')"
+                local after
+                after=$(ssh -n "turbo@$addr" 'readlink -f /run/current-system' 2>/dev/null || true)
+                if [ "$before" = "$after" ]; then
+                    echo "   ok    unchanged, already on ''${after##*-nixos-system-}"
+                else
+                    echo "   ok    ''${after##*-nixos-system-}"
+                fi
             fi
         done
 
