@@ -11,11 +11,24 @@ One repo for every machine. Three hosts:
 Both Linux hosts share `modules/base.nix`, the `nb` rebuild command and the
 `turbo` environment; everything else is per-host and listed in `flake.nix`.
 
+All three are peers in an ssh mesh derived from one registry, `nix/nodes.nix`.
+
+## Docs
+
+| | |
+|---|---|
+| **[nix/docs/architecture.md](nix/docs/architecture.md)** | how the whole thing works: the registry, what `trusted` drives, secrets, deployment, and the turbo environment |
+| **[nix/docs/adding-a-node.md](nix/docs/adding-a-node.md)** | exact steps to set up a machine and have it added as a peer — NixOS, macOS, or any box with nix |
+
 ## Layout
 
 ```
 nix/
   flake.nix                        inputs + every host, via mkLinuxHost
+  nodes.nix                        the node registry: who is in the mesh
+  .sops.yaml                       who can decrypt secrets/ (kept in step with nodes.nix)
+  secrets/secrets.yaml             sops-encrypted: mesh key, shambhala's wireguard key
+  docs/                            architecture.md, adding-a-node.md
   hosts/shambhala/
     configuration.nix              autologin, networking, wireguard, steam, docker
     hardware-configuration.nix     generated; do not hand-edit
@@ -28,6 +41,14 @@ nix/
     base.nix                       what every NixOS host here gets
     desktop.nix                    Plasma 6 on Wayland; opt-in per host
     rebuild.nix                    the `nb` command and the /etc/nixos symlink
+    rebuild-darwin.nix             the same idea, for nix-darwin
+    autoupgrade.nix                nightly switch from the default branch
+    mesh.nix                       the mesh on NixOS, derived from ../nodes.nix
+    mesh-darwin.nix                the same, for macOS; see its header for the gaps
+    mesh-cli.nix                   the `mesh` command
+    registry-check.nix             flake check: the registry and .sops.yaml agree
+    wireguard.nix                  the wg0 tunnel; key per host, sops or out-of-band
+    docker.nix                     docker + turbo's group membership
     nvidia.nix                     proprietary driver, for 4K144 (myosis)
     k3s.nix                        single-node k3s server (shambhala)
     sunshine.nix                   synthetic EDID so headless capture works (shambhala)
@@ -36,7 +57,9 @@ nix/
   turbo/wrappers.nix               git/tmux/starship with config baked in
   turbo/neovim.nix                 the editor as one derivation
   turbo/package.nix                all of it as one buildEnv
-  turbo/system.nix                 NixOS module: account + that package + zsh
+  turbo/shell-init.nix             the zsh config as plain text, for all platforms
+  turbo/shell.nix                  that text as a module, for NixOS and nix-darwin
+  turbo/system.nix                 NixOS module: the account and that package
   turbo/nvim/                      neovim config, as real .lua files
   k3s/, services/                  workload manifests, applied by hand
 
@@ -58,10 +81,14 @@ the `turbo` profile, installed through `users.users.turbo.packages`, so it
 lands in `/etc/profiles/per-user/turbo` and never on root's PATH.
 
 There is no home-manager. Anything with config carries it inside its own
-wrapper (see below), so nothing needs writing into `$HOME`. The single
-exception is zsh: a login shell reads `/etc/zshrc`, which only the NixOS zsh
-module can supply, and that module is also what lets zsh be turbo's shell at
-all.
+wrapper (see below), so nothing needs writing into `$HOME`.
+
+zsh used to be the exception — a login shell reads `~/.zshrc` or `/etc/zshrc`,
+and a derivation may write neither — which meant the shell config was available
+only through the NixOS module. The text now lives in `turbo/shell-init.nix` as
+plain strings rather than module options, so NixOS and nix-darwin consume it as
+`programs.zsh` and everything else gets it from the package as
+`share/turbo/zshrc` plus a `turbo-shell-init` command.
 
 So: new packages go in `turbo/tools.nix`; anything with config gets a wrapper
 in `turbo/wrappers.nix`. The system layer gets something only when it
@@ -74,6 +101,7 @@ nb            build + activate now, and set as boot default
 nb boot       build + set as boot default, do not activate
 nb test       build + activate now, do NOT touch the bootloader
 nb dry        show what activating would change, change nothing
+nb pull       switch to what is on GitHub, ignoring this checkout
 nb update     update flake inputs, then switch
 nb rollback   activate the previous generation
 nb diff       diff the working tree against the running system
@@ -140,7 +168,11 @@ Two ways to consume it:
 | output | for |
 |---|---|
 | `nixosModules.turbo` | another NixOS machine: `imports = [ inputs.shambhala.nixosModules.turbo ];` |
-| `packages.x86_64-linux.turbo` | any machine with nix: `nix profile install github:dunncj/nixos?dir=nix#turbo` |
+| `nixosModules.mesh` | a NixOS machine joining the mesh without the rest of this flake |
+| `packages.<system>.turbo` | any machine with nix: `nix profile install github:dunncj/nixos?dir=nix#turbo` |
+
+Built for `x86_64-linux`, `aarch64-linux`, `x86_64-darwin` and
+`aarch64-darwin`.
 
 `turbo.flakePath`, `turbo.hostName` and `turbo.extraGroups` are the only
 host-dependent options. The first two tell nixd which flake to evaluate for
@@ -201,8 +233,18 @@ re-includes only `nix/` and `archive/`. That is deliberate: without it, `git add
 -A` sweeps in Minecraft world saves, Steam blobs, shell histories, `.ssh/`, and
 `.kube/config`.
 
-Secrets are never committed. The WireGuard key is deployed out of band and read
-from `/etc/wireguard/private.key`; only the peer's public key appears here.
+Secrets are committed, but only encrypted. `nix/secrets/secrets.yaml` is
+sops-encrypted to each trusted node's **ssh host key**, so a machine already in
+the tailnet can decrypt without any bootstrap credential being hand-carried.
+Plaintext keys never appear in the repo, and never in the nix store — which is
+world-readable, so a key committed here is a key published.
+
+Two consequences of this repo being rooted at `$HOME` are worth knowing before
+you touch anything; both are covered in
+[docs/architecture.md](nix/docs/architecture.md#repo-scope). The short version:
+**flakes see only git-tracked files**, so `git add` is part of making a change
+rather than part of finishing it; and a bare `.#` inside `~/nix` resolves to
+the whole home repo rather than the flake directory.
 
 ## Formatting
 
