@@ -34,9 +34,15 @@ let
   trusted = lib.filterAttrs (_: n: n.trusted) registry.nodes;
   untrusted = lib.filterAttrs (_: n: !n.trusted) registry.nodes;
 
-  # Every name a node answers to: bare hostname first (what you type), then
-  # the MagicDNS FQDN, then the raw addresses.
-  namesOf = name: node: [ name "${name}.${domain}" ] ++ node.addresses;
+  # Short forms first after the hostname, since they are what gets typed.
+  # `or [ ]` so a node added before aliases existed still evaluates.
+  aliasesOf = node: node.aliases or [ ];
+
+  # Every name a node answers to: bare hostname, its short aliases, the
+  # MagicDNS FQDN, then the raw addresses. Used for both the ssh client config
+  # and the known_hosts pin, so an alias is never a name that resolves but
+  # fails host-key verification.
+  namesOf = name: node: [ name ] ++ aliasesOf node ++ [ "${name}.${domain}" ] ++ node.addresses;
 
   isIPv6 = addr: lib.hasInfix ":" addr;
 in
@@ -105,10 +111,12 @@ in
       lib.mapAttrsToList (
         name: node:
         lib.listToAttrs (
-          map (addr: lib.nameValuePair addr [
-            name
-            "${name}.${domain}"
-          ]) node.addresses
+          map (
+            addr:
+            lib.nameValuePair addr (
+              [ name ] ++ aliasesOf node ++ [ "${name}.${domain}" ]
+            )
+          ) node.addresses
         )
       ) registry.nodes
     );
@@ -125,7 +133,7 @@ in
     programs.ssh.extraConfig = lib.concatStringsSep "\n" (
       lib.mapAttrsToList (name: node: ''
         # ${node.description}
-        Host ${name} ${name}.${domain}
+        Host ${lib.concatStringsSep " " ([ name ] ++ aliasesOf node)} ${name}.${domain}
           HostName ${lib.head node.addresses}
           User turbo
           IdentityFile /home/turbo/.ssh/id_ed25519
@@ -135,7 +143,7 @@ in
         # ${node.description}
         # Untrusted: named for convenience, but ../nodes.nix marks it outside
         # the mesh and the firewall below blocks port 22 to it.
-        Host ${name} ${name}.${domain}
+        Host ${lib.concatStringsSep " " ([ name ] ++ aliasesOf node)} ${name}.${domain}
           HostName ${lib.head node.addresses}
       '') untrusted
     );

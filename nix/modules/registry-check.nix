@@ -39,6 +39,19 @@ let
   duplicateAddresses = lib.unique (
     lib.filter (addr: lib.count (other: other == addr) allAddresses > 1) allAddresses
   );
+
+  # Aliases share a namespace with hostnames: mesh.nix puts both on the same
+  # ssh `Host` line and into the same /etc/hosts entry. A collision does not
+  # error anywhere, it just means one node quietly answers to a name meant for
+  # another -- `ssh sam` opening a session on the wrong machine is the kind of
+  # thing you find out about afterwards.
+  allAliases = lib.concatMap (n: n.aliases or [ ]) (lib.attrValues nodes);
+
+  duplicateAliases = lib.unique (
+    lib.filter (a: lib.count (other: other == a) allAliases > 1) allAliases
+  );
+
+  aliasesShadowingNames = lib.unique (lib.filter (a: nodes ? ${a}) allAliases);
 in
 runCommand "mesh-registry-check"
   {
@@ -51,6 +64,10 @@ runCommand "mesh-registry-check"
         "nodes with a missing or malformed hostKey/age/addresses: ${lib.concatStringsSep ", " (lib.attrNames malformed)}"
       ++ lib.optional (duplicateAddresses != [ ])
         "addresses claimed by more than one node: ${lib.concatStringsSep ", " duplicateAddresses}"
+      ++ lib.optional (duplicateAliases != [ ])
+        "aliases claimed by more than one node: ${lib.concatStringsSep ", " duplicateAliases}"
+      ++ lib.optional (aliasesShadowingNames != [ ])
+        "aliases that are also node names: ${lib.concatStringsSep ", " aliasesShadowingNames}"
       ++ lib.optional (trustedNames == [ ]) "no trusted nodes: the mesh would be empty"
     );
   }
