@@ -76,6 +76,30 @@
     powerOnBoot = true;
   };
 
+  # Logitech PRO X 2 on a Lightspeed receiver (046d:c54d). Its DPI is set on
+  # the mouse with Solaar rather than slowed down in KDE, which would throw away
+  # sensor precision. Not libratbag/piper: this kernel does not know c54d, so
+  # hid-logitech-dj never binds it and ratbagd sees no devices. Solaar speaks
+  # HID++ over hidraw directly, and this installs the udev rules that let it do
+  # so without root. Without them every /dev/hidraw* is root-only and Solaar
+  # reports "No supported device found", which looks exactly like the mouse
+  # having forgotten its DPI.
+  #
+  # Solaar cannot edit this mouse's onboard profiles, so the mouse runs with
+  # them disabled and the DPI lives in ~/.config/solaar/config.yaml instead.
+  # The mouse forgets it on power-off and Solaar only writes it back while it
+  # is running, so what keeps the DPI is Solaar staying up: userService, not an
+  # /etc/xdg/autostart entry, which gets one attempt at login and stays dead
+  # until the next one if it loses the race with the session.
+  #
+  # programs.solaar, not hardware.logitech.wireless.enableGraphical: that name
+  # is a deprecated alias for this one, and going through it silently skips the
+  # service.
+  programs.solaar = {
+    enable = true;
+    userService.enable = true;
+  };
+
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
   services.pipewire = {
