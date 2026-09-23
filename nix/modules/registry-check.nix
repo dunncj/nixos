@@ -1,14 +1,3 @@
-# `nix flake check` for the registry itself. These are the mistakes that are
-# easy to make by hand and expensive to discover later: a node whose host key
-# was never filled in, two nodes claiming the same address, or -- the one that
-# actually matters -- nix/.sops.yaml drifting out of step with `trusted` in
-# nix/nodes.nix.
-#
-# That last one fails in two directions and both are bad. A trusted node
-# missing from .sops.yaml cannot decrypt the mesh key, so it silently loses
-# ssh at the next rebuild. An untrusted node *present* in .sops.yaml can
-# decrypt it, which is exactly the thing `trusted = false` was supposed to
-# prevent.
 {
   lib,
   runCommand,
@@ -33,18 +22,10 @@ let
 
   allAddresses = lib.concatMap (n: n.addresses) (lib.attrValues nodes);
 
-  # Not `subtractLists (unique xs) xs`: that removes every occurrence of each
-  # value, so it returns the empty list no matter what and the check quietly
-  # never fires. Count instead.
   duplicateAddresses = lib.unique (
     lib.filter (addr: lib.count (other: other == addr) allAddresses > 1) allAddresses
   );
 
-  # Aliases share a namespace with hostnames: mesh.nix puts both on the same
-  # ssh `Host` line and into the same /etc/hosts entry. A collision does not
-  # error anywhere, it just means one node quietly answers to a name meant for
-  # another -- `ssh sam` opening a session on the wrong machine is the kind of
-  # thing you find out about afterwards.
   allAliases = lib.concatMap (n: n.aliases or [ ]) (lib.attrValues nodes);
 
   duplicateAliases = lib.unique (

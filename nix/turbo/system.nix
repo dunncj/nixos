@@ -1,15 +1,3 @@
-# turbo, as a NixOS module: the account and the whole environment.
-#
-# This is the portable unit - import it on any NixOS machine and that machine
-# becomes turbo's. It replaces the home-manager module that used to live in
-# ./home.nix.
-#
-# Packages come from ./package.nix and go into users.users.turbo.packages, so
-# they land in /etc/profiles/per-user/turbo and root still gets none of them.
-# The dotfiles home-manager used to write into $HOME now ride inside the
-# wrappers in ./wrappers.nix, so nothing here writes to $HOME or /etc. The one
-# exception is zsh: a login shell reads /etc/zshrc, which the NixOS zsh module
-# below supplies.
 {
   config,
   lib,
@@ -26,9 +14,6 @@ let
   };
 in
 {
-  # The cross-platform half of turbo's shell. nix-darwin imports the same file
-  # directly from ../flake.nix, which is what keeps the MacBook's zsh identical
-  # to the Linux boxes' rather than merely similar.
   imports = [ ./shell.nix ];
 
   options.turbo = {
@@ -87,32 +72,13 @@ in
       ]
       ++ cfg.extraGroups;
 
-      # Authorised keys are NOT set here any more. ../modules/mesh.nix
-      # derives them from ../nodes.nix, so one registry drives
-      # authorized_keys, known_hosts, /etc/hosts and the firewall from a
-      # single declaration of who is trusted. Two places to edit was how
-      # root@agartha-tunnel kept root access to this box long after
-      # anyone intended it to.
-
-      # The whole environment as one package. Per-user, so root's PATH is
-      # untouched.
       packages = [ env ];
     };
 
-    # zsh runs zsh-newuser-install on every interactive start when the user has
-    # none of .zshenv/.zprofile/.zshrc/.zlogin - which is the state that removing
-    # home-manager left behind, since it owned those files. The real config is in
-    # /etc/zshrc and is read first; this one only has to exist.
-    #
-    # `f` creates it once and never rewrites it, so anything added by hand stays.
     systemd.tmpfiles.rules = [
       "f ${config.users.users.turbo.home}/.zshrc 0644 turbo users - # personal zsh additions - system config lives in /etc/zshrc, from nix/turbo/system.nix"
     ];
 
-    # The rest of the shell - aliases, keybindings, EDITOR, the direnv hook and
-    # the starship prompt - is in ./shell.nix, imported above, because the
-    # MacBook needs the same thing and cannot import this file. What is left
-    # here is the part with no nix-darwin equivalent.
     programs.zsh = {
       histSize = 10000;
       setOptions = [

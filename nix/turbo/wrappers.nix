@@ -1,14 +1,3 @@
-# git, tmux and starship with their config baked in.
-#
-# Same idea as ./neovim.nix: the config travels inside the derivation instead
-# of being written into $HOME or /etc, so these behave identically whether
-# they arrive through ./system.nix or through a bare
-# `nix profile install ...#turbo` on a machine that has never seen this repo.
-#
-# It also keeps root clean. The NixOS programs.{git,tmux,starship,direnv}
-# modules all push their package into environment.systemPackages, which would
-# put these on root's PATH; wrapping them here means they exist only in
-# turbo's own profile.
 {
   lib,
   formats,
@@ -23,8 +12,6 @@
 }:
 
 let
-  # GIT_CONFIG_SYSTEM replaces /etc/gitconfig, so a per-user ~/.gitconfig
-  # still layers on top and `git config --global` keeps working.
   gitConfig = writeText "gitconfig" (
     lib.generators.toGitINI {
       user = {
@@ -35,9 +22,6 @@ let
       init.defaultBranch = "main";
       pull.rebase = false;
 
-      # Authenticate pushes through the gh token rather than a second
-      # credential store. gh is resolved from PATH so this keeps working if
-      # the profile's gh is upgraded independently.
       credential."https://github.com".helper = "!gh auth git-credential";
     }
   );
@@ -68,17 +52,11 @@ let
     set -g status-interval 5
   '';
 
-  # Built with runCommand rather than writeText so the reload binding can
-  # point at the config's own final store path.
   tmuxConfig = runCommand "tmux.conf" {
     body = tmuxConfigBody;
     passAsFile = [ "body" ];
   } ''substitute "$bodyPath" "$out" --replace-fail '@SELF@' "$out"'';
 
-  # Deliberately minimal: user, host and a prompt character, nothing else.
-  # Starship's default format would otherwise add a git branch on every
-  # directory ($HOME is itself a git repo) and a Java version in $HOME
-  # (server.jar makes it look like a Java project).
   starshipConfig = (formats.toml { }).generate "starship.toml" {
     add_newline = false;
     format = "$username$hostname$character";
@@ -102,8 +80,6 @@ let
     };
   };
 
-  # wrapProgram refuses to operate on the symlinks symlinkJoin creates, so
-  # each wrapped entry point is removed and recreated as a real wrapper.
   wrap =
     {
       name,
@@ -140,10 +116,6 @@ in
     name = "starship-turbo";
     package = starship;
     binary = "starship";
-    # --set, not --set-default: a stale STARSHIP_CONFIG in the environment
-    # (systemd user managers keep imported values long after the file that set
-    # them is gone) would otherwise silently defeat this config and drop
-    # starship back to its defaults.
     args = ''--set STARSHIP_CONFIG "${starshipConfig}"'';
   };
 }

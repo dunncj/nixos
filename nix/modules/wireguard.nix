@@ -1,16 +1,3 @@
-# The wg0 tunnel to the VPS at 178.156.205.76.
-#
-# Everything except this host's own address is identical on every peer, so the
-# shared parts live here and each host sets `tunnel.address`. There is no
-# default: a silent default would be an address collision, and two hosts sharing
-# a tunnel IP fails in a way that looks like packet loss rather than like a
-# config error.
-#
-# The private key is per-host and never in this repo -- the nix store is world
-# readable, so a key committed here is a key published. Where it comes from is
-# `tunnel.privateKeySecret`, which is deliberately explicit rather than
-# defaulted: the two sources have very different properties and picking one by
-# accident is how shambhala's key ended up mode 0644 in the first place.
 {
   config,
   lib,
@@ -51,8 +38,6 @@ in
   };
 
   config = {
-    # Decrypted before wireguard-wg0 starts; restartUnits makes the interface
-    # pick up a rotated key without a reboot.
     sops.secrets = lib.mkIf (cfg.privateKeySecret != null) {
       ${cfg.privateKeySecret} = {
         restartUnits = [ "wireguard-wg0.service" ];

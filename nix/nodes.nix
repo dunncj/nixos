@@ -1,57 +1,10 @@
-# The node registry: who is in turbo's mesh, what they are called, and how
-# they are identified. This file is the single source of truth. Everything
-# else -- authorized_keys, known_hosts, /etc/hosts, ssh client aliases, the
-# firewall's isolation rules and the sops recipient list -- is derived from
-# it by ./modules/mesh.nix on NixOS and ./modules/mesh-darwin.nix on macOS.
-# Both read this file; neither is edited by hand, and nothing downstream is.
-#
-# Adding a node is one attrset here plus `mesh add-node`, which fills the
-# attrset in for you. See ./modules/mesh.nix for what each field drives, and
-# mesh-darwin.nix's header for the four things macOS cannot express.
-#
-# Only public material lives here. Host keys and age recipients are public by
-# construction -- they are what a stranger gets from `ssh-keyscan` -- so this
-# file is safe in a public repo. The one private key in the system is the
-# shared mesh identity, which lives encrypted in ./secrets/secrets.yaml.
 {
-  # Each node's `aliases` are extra names it answers to: short forms for
-  # typing. They are spelled out per node rather than derived from a prefix of
-  # the hostname, because a derived rule would give shambhala "sha" and the
-  # name that is actually wanted is "sam". A rule with an exception in it is
-  # worse than a list.
-  #
-  # Aliases are real names everywhere, not a shell-level shortcut: ../modules/
-  # mesh.nix puts them in the ssh client config, in /etc/hosts and in the
-  # pinned known_hosts entry, so `ssh sam`, `ping sam` and host-key
-  # verification all agree. ../modules/registry-check.nix fails the build if
-  # two nodes claim the same one, or if an alias collides with a node's name.
 
-  # The tailnet's MagicDNS suffix. Used to build the FQDN aliases, but nothing
-  # depends on MagicDNS actually resolving: ./modules/mesh.nix also writes
-  # every name into /etc/hosts, so `ssh myosis` keeps working when headscale
-  # is unreachable.
   domain = "headscale.agartha.sh";
 
-  # Public half of the shared mesh identity. Every trusted node authorises
-  # this one key, and every trusted node holds its private half (decrypted
-  # from sops to ~turbo/.ssh/id_ed25519).
-  #
-  # One shared key rather than N per-node keys is a deliberate trade. The
-  # mesh is all-trust-all by definition -- the ask was that every node reach
-  # every other freely -- so per-node keys would not shrink the blast radius
-  # of a compromise, they would only mean that adding the (N+1)th node
-  # requires rebuilding the other N before it can talk to any of them. With
-  # one key, a new node decrypts and is immediately reachable both ways, and
-  # no existing machine has to be touched. The cost is that revocation is
-  # all-or-nothing: see `mesh rotate`.
   meshPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO4z91t1gzX4xzFbh2t52hvvREDJiQjBneu5PLZ/YuI2 turbo@mesh";
 
-  # Human keys that are authorised on every trusted node regardless of the
-  # mesh key. These are the anti-lockout floor: if the mesh key is ever lost,
-  # rotated badly, or not yet deployed to a machine, these still get you in.
-  # Never let this list reach zero.
   adminKeys = [
-    # Cameron's MacBook -- the day-to-day way in.
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPZ/zuXWvni75yWM7lyCpdAPIguxBc46PCzq+6TGnYt camerondunn@Camerons-MacBook-Pro-3811"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPx+ga2HMIrdfP+qbCYWEyWHWtXCTtX46aibp9iOt8dA turbo25037@gmail.com"
   ];
@@ -95,15 +48,6 @@
       hostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB0TQYH9PWFYSb74HZiugB/0TzoLJT8Ei4LTshX2uLkW";
       age = "age1n26p4eephjfktel06h8a6uwwz2wppww22tna3wrgca3jw70p9ajqtugae0";
     };
-
-    # --- untrusted: reachable on the wire, deliberately outside the mesh ---
-    #
-    # Both of these are public, internet-facing boxes. They are listed so that
-    # their host keys are pinned and their names resolve, and so the firewall
-    # knows which addresses to isolate -- not so they can be logged into.
-    # `trusted = false` means: no mesh key in their authorized_keys, no mesh
-    # key on disk for them to use, no sops secret encrypted to them, and an
-    # explicit two-way block on port 22 in ./modules/mesh.nix.
 
     teyos = {
       description = "Headscale control plane and exit node. The tailnet depends on it; it is not part of the mesh.";

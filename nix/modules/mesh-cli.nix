@@ -1,17 +1,3 @@
-# `mesh` - the one command for running the node registry.
-#
-# Adding a machine is the workflow this exists for. There is an irreducible
-# round trip in it -- a new node has to exist and be reachable before anyone
-# can learn the host key that both pins it and lets it decrypt secrets -- so
-# the goal here is not to remove the round trip but to make it one command
-# that cannot be got subtly wrong:
-#
-#   mesh add-node myosis 100.64.0.4
-#   nb                                  # on each machine, or `mesh deploy`
-#
-# Everything it writes goes into nix/nodes.nix and nix/.sops.yaml, which are
-# reviewed and committed like any other change. Nothing is applied behind
-# your back.
 {
   lib,
   writeShellApplication,

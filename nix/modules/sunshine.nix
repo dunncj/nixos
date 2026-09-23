@@ -1,43 +1,6 @@
 { pkgs, ... }:
 
 let
-  # This box is headless: every DRM connector reads "disconnected", so KWin has
-  # no real output and Sunshine's KMS grab enumerates an empty monitor list
-  # ("Unable to initialize capture method" -> no encoder -> HTTP 503 to Moonlight).
-  #
-  # Fix: hand the dGPU's DP-1 a synthetic EDID and force the connector on, which
-  # gives KWin a CRTC to render into and Sunshine a monitor to capture.
-  #
-  # A `video=DP-1:1920x1080@60D` kernel param would also work, but it cannot be
-  # verified without a reboot and synthesizes its own mode list; this does exactly
-  # what was tested live on the running system.
-  #
-  # 128-byte EDID 1.3, name "Virtual". EDID 1.3 has exactly four descriptor slots
-  # and the first detailed timing is the PREFERRED one, so the order below is what
-  # KWin boots into:
-  #
-  #   1. 2560x1440@60  CVT-RB  241.70 MHz  <- preferred
-  #   2. 3840x2160@60  CVT-RB  533.28 MHz
-  #   3. 1920x1080@60  CEA     148.50 MHz
-  #   4. monitor name "Virtual"
-  #
-  # 1440p is preferred rather than 4K deliberately: the desktop mode is also what
-  # games render at, and an RX 7600 drives 1440p60 far more comfortably than 4K60.
-  # Moonlight can still request 4K; switch the desktop with
-  #   kscreen-doctor output.DP-1.mode.3840x2160@60
-  #
-  # 4K uses the CVT reduced-blanking timing (533.28 MHz) rather than the CEA one
-  # (594 MHz) because the connector is force-enabled with no sink to link-train
-  # against, so the lower pixel clock is likelier to survive mode validation.
-  #
-  # There is no range-limits (0xFD) descriptor because the feature byte leaves the
-  # continuous-frequency bit clear, which frees that fourth slot for a third mode.
-  #
-  # Physical size is declared 697x392 mm (~31.5"). That is a lie, but a deliberate
-  # one: it puts 4K at ~140 DPI so Plasma does not auto-select 2x scaling, which
-  # would render the desktop at an effective 1080p and waste the extra pixels.
-  #
-  # Regenerate with: perl modules/sunshine-edid.pl | base64 -w0
   edidBase64 = "AP///////wAx2AAAAAAAAAAkAQOARid4Cu6Ro1RMmSYPUFQAAAABAQEBAQEBAQEBAQEBAQEBal4AoKCgKVAwIDUAuYghAAAaUNAAoPBwPoAwIDUAuYghAAAaAjqAGHE4LUBYLEUAuYghAAAeAAAA/ABWaXJ0dWFsCiAgICAgAGE=";
 
   virtualEdid = pkgs.runCommand "virtual-1080p-edid" { } ''
@@ -46,7 +9,6 @@ let
     [ "$(stat -c%s "$out/edid.bin")" = "128" ] || { echo "bad EDID size"; exit 1; }
   '';
 
-  # dGPU (Radeon RX 7600). PCI address is stable; card0/card1 numbering is not.
   gpuPci = "0000:03:00.0";
   connector = "DP-1";
 in

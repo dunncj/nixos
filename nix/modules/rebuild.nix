@@ -1,11 +1,3 @@
-# `nb` - the rebuild entry point, plus the /etc/nixos symlink that keeps a bare
-# `nixos-rebuild` from ever building a stale second copy of the system.
-#
-# Host-agnostic: the flake path and the attribute to build come from
-# turbo.flakePath and turbo.hostName (declared in ../turbo/system.nix), so this
-# module is correct on shambhala and myosis alike. It used to hardcode
-# shambhala, which on any second host would have silently rebuilt the wrong
-# machine's config.
 {
   config,
   lib,
@@ -32,39 +24,13 @@ in
     "L+ /etc/nixos - - - - ${cfg.flakePath}"
   ];
 
-  # This repo is rooted at $HOME with the flake in a subdirectory, so a bare
-  # `.#` typed inside ~/nix resolves to git+file:///home/turbo?dir=nix. That
-  # has two costs, and `nb` only ever avoided them by spelling out `path:`:
-  #
-  #   - the flake source becomes the whole tracked home tree. ~/nix is 280K;
-  #     ~/archive is 7.5M, and all of it is copied into the store to evaluate
-  #     a NixOS config that does not reference a byte of it.
-  #   - "warning: Git tree '/home/turbo' is dirty" on every command, because
-  #     the dirty check covers the entire repo. An uncommitted note in
-  #     ~/archive makes a rebuild of shambhala look unclean.
-  #
-  # `nixos` as a registry alias means `nix build nixos#...`, `nix flake check
-  # nixos` and friends get the path: form without anyone having to remember
-  # it, from any directory.
   nix.registry.nixos.to = {
     type = "path";
     path = cfg.flakePath;
   };
 
-  # With the alias above, the remaining dirty warnings come from typing `.#`
-  # inside the repo, where they say nothing useful: `path:` builds ignore git
-  # entirely, so "dirty" is not a statement about what is being built. The
-  # committed-ness of the tree is what `git status` is for.
   nix.settings.warn-dirty = false;
 
-  # Replaces the old alias `sudo nixos-rebuild switch --flake ~/nix#$(hostname)`,
-  # which got two things wrong:
-  #
-  #   1. `~/nix` sits inside the git repo at /home/turbo, so nix resolved it to
-  #      `git+file:///home/turbo?dir=nix` and copied the *entire* home repo into
-  #      the store on every build. `path:` pins it to the 88K dir instead.
-  #   2. A switch that restarts dbus leaves PID 1 with a dead bus connection,
-  #      after which `reboot` silently does nothing. `daemon-reexec` fixes that.
   environment.systemPackages = [
     (pkgs.writeShellApplication {
       name = "nb";

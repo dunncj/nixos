@@ -1,20 +1,3 @@
-# The mesh: every trusted node reaches every other trusted node over ssh, by
-# name, with no per-machine hand-editing and no key material in the repo.
-#
-# Everything here is derived from ../nodes.nix. That file is the only thing
-# you edit; this one turns it into:
-#
-#   authorized_keys   the shared mesh key + the admin keys, on trusted nodes
-#   known_hosts       every node's host key, pinned, under every name it has
-#   /etc/hosts        every node's names, so lookups survive headscale being
-#                     down (MagicDNS is still accepted, it is just not relied on)
-#   ssh client config `ssh myosis` works as turbo, with the right identity
-#   firewall          untrusted nodes blocked on port 22, both directions
-#   sops              the mesh private key, decrypted per-node to ~/.ssh
-#
-# The shape to keep in mind: trust is a property of the *node*, declared once
-# in the registry, and every one of those six outputs reads that same flag.
-# There is no second place where a node can be half-trusted.
 {
   config,
   lib,
@@ -28,20 +11,11 @@ let
 
   inherit (registry) domain meshPublicKey adminKeys;
 
-  # Only nodes that opted in. `trusted = false` nodes stay in `registry.nodes`
-  # -- their host keys and names are still useful -- but they are absent from
-  # every trust decision below.
   trusted = lib.filterAttrs (_: n: n.trusted) registry.nodes;
   untrusted = lib.filterAttrs (_: n: !n.trusted) registry.nodes;
 
-  # Short forms first after the hostname, since they are what gets typed.
-  # `or [ ]` so a node added before aliases existed still evaluates.
   aliasesOf = node: node.aliases or [ ];
 
-  # Every name a node answers to: bare hostname, its short aliases, the
-  # MagicDNS FQDN, then the raw addresses. Used for both the ssh client config
-  # and the known_hosts pin, so an alias is never a name that resolves but
-  # fails host-key verification.
   namesOf = name: node: [ name ] ++ aliasesOf node ++ [ "${name}.${domain}" ] ++ node.addresses;
 
   isIPv6 = addr: lib.hasInfix ":" addr;
@@ -87,26 +61,14 @@ in
         message = "mesh.self = \"${cfg.self}\" is not a node in nix/nodes.nix.";
       }
       {
-        # The registry comment says never let this reach zero; enforce it,
-        # because the failure mode is a headless box nobody can log into.
         assertion = adminKeys != [ ];
         message = "nix/nodes.nix: adminKeys is empty, which would leave every node reachable only by the mesh key. Refusing to build.";
       }
     ];
 
-    # --- identity -----------------------------------------------------------
-    #
-    # Trusted nodes authorise the one shared mesh key, plus the admin keys as
-    # the floor. Untrusted nodes get the admin keys only, so `trusted = false`
-    # genuinely removes a machine's ability to log in anywhere -- it has no
-    # mesh key on disk to present.
     users.users.turbo.openssh.authorizedKeys.keys =
       adminKeys ++ lib.optional (trusted ? ${cfg.self}) meshPublicKey;
 
-    # --- names --------------------------------------------------------------
-    #
-    # Written for every node, trusted or not: being able to resolve and verify
-    # teyos is orthogonal to being allowed to log into it.
     networking.hosts = lib.mkMerge (
       lib.mapAttrsToList (
         name: node:
@@ -121,15 +83,11 @@ in
       ) registry.nodes
     );
 
-    # Host key pinning, so a rebuilt node produces a loud, correct error
-    # instead of the interactive "REMOTE HOST IDENTIFICATION HAS CHANGED"
-    # prompt that trains you to delete known_hosts lines without reading them.
     programs.ssh.knownHosts = lib.mapAttrs (name: node: {
       hostNames = namesOf name node;
       publicKey = node.hostKey;
     }) registry.nodes;
 
-    # --- client config ------------------------------------------------------
     programs.ssh.extraConfig = lib.concatStringsSep "\n" (
       lib.mapAttrsToList (name: node: ''
         # ${node.description}
@@ -148,12 +106,6 @@ in
       '') untrusted
     );
 
-    # --- secrets ------------------------------------------------------------
-    #
-    # Each node decrypts with its own ssh host key, so there is no bootstrap
-    # key to copy around: a machine that is in the tailnet already has the
-    # identity it needs. Adding a node is `mesh add-node`, which appends its
-    # host key as a recipient and re-encrypts.
     sops = {
       defaultSopsFile = ../secrets/secrets.yaml;
       age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
@@ -168,25 +120,12 @@ in
       };
     };
 
-    # sops writes the key as a symlink into this directory; ssh will not use an
-    # identity whose directory is group- or world-writable.
     systemd.tmpfiles.rules = [
       "d /home/turbo/.ssh 0700 turbo users -"
     ];
 
-    # The public half is not a secret and does not need decrypting, so it is
-    # written directly. ssh-copy-id and `ssh -i` both want it present.
     environment.etc."ssh/mesh_id_ed25519.pub".text = meshPublicKey + "\n";
 
-    # --- isolation ----------------------------------------------------------
-    #
-    # The registry already denies untrusted nodes any usable credential, so
-    # this is defence in depth rather than the primary control: it means a
-    # stolen mesh key on teyos still does not open a session, and it stops
-    # this node from being talked into dialling out to one of them.
-    #
-    # Inserted at the head of nixos-fw so it precedes the accept rules the
-    # openssh module adds.
     networking.firewall.extraCommands = lib.concatStringsSep "\n" (
       lib.flatten (
         lib.mapAttrsToList (
@@ -212,21 +151,12 @@ in
       )
     );
 
-    # The registry is only as good as the tool that maintains it; ship them
-    # together so a node can never have one without the other.
     environment.systemPackages = [
       (pkgs.callPackage ./mesh-cli.nix { inherit (cfg) flakePath flakeUrl; })
     ];
 
-    # --- sshd ---------------------------------------------------------------
     services.openssh = {
       enable = true;
-      # The registry is the ONLY source of authorised keys. By default sshd
-      # also reads ~/.ssh/authorized_keys, which is untracked and gitignored --
-      # and which on shambhala still contained root@agartha-tunnel long after
-      # it was removed from the repo. Narrowing this to the managed path is
-      # what makes `trusted = false` in ../nodes.nix actually mean something:
-      # otherwise a key can outlive every declaration of it.
       authorizedKeysFiles = lib.mkForce [ "/etc/ssh/authorized_keys.d/%u" ];
 
       settings = {
@@ -236,9 +166,6 @@ in
       };
     };
 
-    # MagicDNS is accepted so short names keep working for nodes that are in
-    # the tailnet but not yet in the registry. /etc/hosts above is what makes
-    # the registry's own names independent of it.
     services.tailscale.extraUpFlags = [ "--accept-dns=true" ];
   };
 }

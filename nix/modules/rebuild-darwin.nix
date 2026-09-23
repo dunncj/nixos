@@ -1,9 +1,3 @@
-# `nb` - the rebuild entry point for amarout, mirroring ./rebuild.nix's
-# shambhala wrapper. Uses `path:` so nix does not copy this whole
-# $HOME-rooted repo into the store on every build.
-#
-# darwin-rebuild itself handles sudo elevation for activation, so unlike the
-# NixOS version this does not need to re-exec as root.
 { pkgs, ... }:
 {
   environment.systemPackages = [
